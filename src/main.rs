@@ -1,6 +1,8 @@
 pub mod waveform_page;
 
 mod data_loader;
+
+mod audio_player;
 pub mod not_retarded_vector;
 
 use data_loader::find_file;
@@ -37,13 +39,14 @@ pub enum MesDummies {
     SelectEnd { end: NRVec },
     ForceRedraw,
     OpenFile,
+    PlayAudio,
 }
 
 impl<'a> Adio {
     fn top_menu() -> iced::widget::Row<'a, MesDummies> {
         let menu: iced::widget::Row<'_, MesDummies> = row![
             button("Import").padding(5).on_press(MesDummies::OpenFile),
-            button("Die").padding(5)
+            button("Play").padding(5).on_press(MesDummies::PlayAudio)
         ]
         .spacing(5)
         .padding(5)
@@ -96,11 +99,15 @@ impl Sandbox for Adio {
             MesDummies::ForceRedraw => self.pages[self.cur_page].request_redraw(),
 
             MesDummies::OpenFile => {
-                let data = find_file();
+                let (data, sample_rate, channels) = find_file();
                 if data.is_empty() {
                     return;
                 }
-                self.pages[self.cur_page] = WaveformPage::new_widh_data(data);
+                self.pages[self.cur_page] =
+                    WaveformPage::new_widh_data(data, sample_rate, channels);
+            }
+            MesDummies::PlayAudio => {
+                self.pages[self.cur_page].play_audio();
             }
         }
     }

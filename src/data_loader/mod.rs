@@ -12,7 +12,7 @@ fn test_env() {
     println!("\n");
 }
 
-pub fn find_file() -> Vec<i16> {
+pub fn find_file() -> (Vec<i16>, u32, u16) {
     let dir = fs::read("./dirsave.txt")
         .map(|v| String::from_utf8(v).unwrap_or("./".to_string()))
         .unwrap_or("./".to_string());
@@ -22,7 +22,7 @@ pub fn find_file() -> Vec<i16> {
         Some(s) => s,
         None => {
             println!("no file selected");
-            return Vec::new();
+            return (Vec::new(), 0, 0);
         }
     };
 
@@ -252,10 +252,10 @@ mod play_ogg {
     use std::time::Duration;
 
     use audrey::dasp_sample::ToSample;
-    use rodio::Decoder;
+    use rodio::{Decoder, Source};
     use symphonia::core::conv::IntoSample;
 
-    pub fn temst(path: PathBuf) -> Vec<i16> {
+    pub fn temst(path: PathBuf) -> (Vec<i16>, u32, u16) {
         // let (_stream, _stream_handle) = rodio::OutputStream::try_default().unwrap();
 
         let file = std::fs::File::open(path).unwrap();
@@ -264,6 +264,7 @@ mod play_ogg {
         // let x = buffer.read_to_end(&mut all_buf);
         // println!("len is {:?} bytes", x);
         let decoder = Decoder::new(buffer).expect("decoded");
+        let (sample_rate, channels) = (decoder.sample_rate(), decoder.channels());
         let data: Vec<i16> = decoder.collect();
         // let beep1 = match _stream_handle.play_once(buffer) {
         //     Ok(o) => o,
@@ -278,6 +279,6 @@ mod play_ogg {
         // thread::sleep(Duration::from_millis(1500));
         // drop(beep1);
         // // println!("Stopped beep1");
-        data
+        (data, sample_rate, channels)
     }
 }

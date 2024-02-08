@@ -11,6 +11,7 @@ use iced::{Element, Length, Rectangle, Renderer, Size, Theme}; //, Vector, Point
 
 use rand::Rng;
 
+use crate::audio_player::play_i16_audio;
 use crate::not_retarded_vector::NRVec;
 use crate::MesDummies;
 
@@ -36,6 +37,8 @@ pub struct WaveformPage {
     // selection:(usize,usize),
     transform: Transform,
     cache: Cache,
+    sample_rate: u32,
+    channels: u16,
 }
 
 // impl Default for WaveformPage {
@@ -56,6 +59,8 @@ impl WaveformPage {
             data,
             transform: Transform::default(),
             cache: Cache::new(),
+            sample_rate: 44800,
+            channels: 1,
         }
     }
 
@@ -78,14 +83,18 @@ impl WaveformPage {
             data,
             transform: Transform::default(),
             cache: Cache::new(),
+            sample_rate: 44800,
+            channels: 1,
         }
     }
 
-    pub fn new_widh_data(data: Vec<i16>) -> Self {
+    pub fn new_widh_data(data: Vec<i16>, sample_rate: u32, channels: u16) -> Self {
         WaveformPage {
             data,
             transform: Transform::default(),
             cache: Cache::new(),
+            sample_rate,
+            channels,
         }
     }
 
@@ -118,5 +127,9 @@ impl WaveformPage {
             .width(Length::Fill)
             .height(Length::Fill)
             .into()
+    }
+
+    pub fn play_audio(&self) {
+        play_i16_audio(&self.data, self.sample_rate, self.channels);
     }
 }

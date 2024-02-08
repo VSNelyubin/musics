@@ -43,9 +43,9 @@ impl Transform {
         //     self.middle_idx += abs;
         // }
         let delt = _dy * 8.0 / self.scale.x;
-        print!("{:3.4} ",delt);
+        // print!("{:10.4} ", delt);
         let delt = (delt as i64).abs();
-        println!(" {delt}");
+        // println!(" {delt}");
         self.middle_idx = if _dy < 0.0 {
             self.middle_idx
                 .checked_sub(1 + delt as usize)
@@ -147,16 +147,29 @@ impl<'w> WaveformDrawer<'w> {
                 return None;
             }
         }; //offset_index
+        if i64_x >= 0x8000 {
+            return None;
+        }
+        if i64_x <= -0x8000 {
+            return None;
+        }
+        let con_x: Option<f32> = i64_x
+            .try_into()
+            .ok()
+            .and_then(|i16_x: i16| i16_x.try_into().ok());
+        if con_x.is_none() {
+            println!("{:x}", i64_x);
+            panic!("stop here");
+        }
         let i16_x: i16 = i64_x.try_into().ok()?;
         let f32_x: f32 = i16_x.try_into().ok()?;
         let scaled_x = f32_x * self.parent.transform.scale.x;
-        // if !bounds.contains(nr_vec(scaled_x, 1.0).into()) {
-        //     return None;
-        // }
         let y_1: i16 = self.parent.data[pos]; //.try_into().expect("ints convert");
         let y: f32 = y_1.try_into().expect("floats convert");
         let scaled_y = y * self.parent.transform.scale.y;
-        Some(nr_vec(scaled_x, scaled_y))
+        let point = nr_vec(scaled_x, scaled_y);
+        let ofpoint = point - nr_vec(0.0, point.y) + bounds.center();
+        bounds.contains(ofpoint.into()).then_some(point)
     }
 
     fn path(&self, bounds: Rectangle) -> Path {
