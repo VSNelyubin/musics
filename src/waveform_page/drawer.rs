@@ -20,8 +20,9 @@ use super::WaveformPage;
 use not_retarded_vector::NRVec;
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct Transform {
-    // pos: NRVec,
+    pos: NRVec,
     scale: NRVec,
     middle_idx: usize,
 }
@@ -32,8 +33,29 @@ impl Transform {
             ScrollDelta::Lines { y, .. } => y,
             ScrollDelta::Pixels { y, .. } => y,
         };
-        // self.pos.x += _dy * 8.0;
-        // self.middle_idx+=(_dy*8.0).;
+        // self.pos.x += _dy * 8.0 / (1.0 + self.scale.x);
+        // let delt = (_dy * 8.0 / (1.0 + self.scale.x)) as i64;
+        // if delt < 0 {
+        //     let abs: usize = delt.abs().try_into().unwrap();
+        //     self.middle_idx -= abs.min(self.middle_idx);
+        // } else {
+        //     let abs: usize = delt.abs().try_into().unwrap();
+        //     self.middle_idx += abs;
+        // }
+        let delt = _dy * 8.0 / self.scale.x;
+        print!("{:3.4} ",delt);
+        let delt = (delt as i64).abs();
+        println!(" {delt}");
+        self.middle_idx = if _dy < 0.0 {
+            self.middle_idx
+                .checked_sub(1 + delt as usize)
+                .unwrap_or(self.middle_idx)
+        } else {
+            self.middle_idx
+                .checked_add(1 + delt as usize)
+                .unwrap_or(self.middle_idx)
+        };
+        // println!("{}\t{}", self.pos.x, self.middle_idx);
     }
 
     pub fn scale(&mut self, _scale: NRVec) {
@@ -72,7 +94,7 @@ impl Transform {
 impl Default for Transform {
     fn default() -> Self {
         Transform {
-            // pos: nr_vec(0.0, 0.0),
+            pos: nr_vec(0.0, 0.0),
             scale: nr_vec(1.0, 1.0),
             middle_idx: 0,
         }
@@ -98,6 +120,7 @@ impl<'w> WaveformDrawer<'w> {
         self.parent.transform.canvas_to_position(point, bounds)
     }
 
+    #[allow(unused)]
     fn get_point(&self, pos: usize, bounds: Rectangle) -> NRVec {
         let x_1: i16 = pos.try_into().expect("ints convert");
         let x: f32 = x_1.try_into().expect("floats convert");
@@ -109,8 +132,9 @@ impl<'w> WaveformDrawer<'w> {
         // Point::new(x, y)
     }
 
+    #[allow(unused)]
     fn get_point_2(&self, pos: usize, bounds: Rectangle) -> Option<NRVec> {
-        let off = self.parent.transform.middle_idx.min(pos);
+        let off = self.parent.transform.middle_idx; //.min(pos);
         let i64_x: i64 = if let (Ok(s_pos), Ok(s_off)) = (pos.try_into(), off.try_into()) {
             let poss: i64 = s_pos;
             let offs: i64 = s_off;
@@ -125,14 +149,23 @@ impl<'w> WaveformDrawer<'w> {
         }; //offset_index
         let i16_x: i16 = i64_x.try_into().ok()?;
         let f32_x: f32 = i16_x.try_into().ok()?;
-        let scaled_x = f32_x / self.parent.transform.scale.x;
-        None
+        let scaled_x = f32_x * self.parent.transform.scale.x;
+        // if !bounds.contains(nr_vec(scaled_x, 1.0).into()) {
+        //     return None;
+        // }
+        let y_1: i16 = self.parent.data[pos]; //.try_into().expect("ints convert");
+        let y: f32 = y_1.try_into().expect("floats convert");
+        let scaled_y = y * self.parent.transform.scale.y;
+        Some(nr_vec(scaled_x, scaled_y))
     }
 
     fn path(&self, bounds: Rectangle) -> Path {
         let mut res = Builder::new();
-        for pos in 0..self.parent.data.len() {
-            res.line_to(self.get_point(pos, bounds).into());
+        // for pos in 0..self.parent.data.len() {
+        //     res.line_to(self.get_point(pos, bounds).into());
+        // }
+        for pnt in (0..self.parent.data.len()).filter_map(|pos| self.get_point_2(pos, bounds)) {
+            res.line_to(pnt.into());
         }
         res.build()
     }
