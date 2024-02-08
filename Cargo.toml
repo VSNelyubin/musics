@@ -1,0 +1,19 @@
+[package]
+name = "qgui_try"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+alsa-sys = "0.3.1"
+audrey = "0.3.0"
+iced = {version="0.10.0", features = ["canvas", "tokio", "debug", "advanced"]}
+iced_audio = "0.12.0"
+minimp3 = "0.5.1"
+rand = "0.8.5"
+rfd = "0.12.1"
+rodio = "0.17.3"
+rustc-hash = "1.1.0"
+symphonia = {version="0.5.3", features = ["all-codecs"]}
+tracing-subscriber = "0.3.18"
