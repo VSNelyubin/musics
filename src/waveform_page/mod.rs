@@ -34,7 +34,7 @@ fn wrap(mut val: Audi) -> Audi {
 #[derive(Default, Debug)]
 pub struct WaveformPage {
     data: Vec<Audi>,
-    // selection:(usize,usize),
+    selection: (usize, usize),
     transform: Transform,
     cache: Cache,
     sample_rate: u32,
@@ -61,6 +61,7 @@ impl WaveformPage {
             cache: Cache::new(),
             sample_rate: 44800,
             channels: 1,
+            selection: (0, 0),
         }
     }
 
@@ -85,6 +86,7 @@ impl WaveformPage {
             cache: Cache::new(),
             sample_rate: 44800,
             channels: 1,
+            selection: (0, 0),
         }
     }
 
@@ -95,6 +97,7 @@ impl WaveformPage {
             cache: Cache::new(),
             sample_rate,
             channels,
+            selection: (0, 0),
         }
     }
 
@@ -111,6 +114,12 @@ impl WaveformPage {
 
     pub fn scale(&mut self, scale: NRVec) {
         self.transform.scale(scale);
+    }
+
+    pub fn select_begin(&mut self, begin: NRVec) {
+        let rounded = self.transform.get_pos(begin.x);
+        println!("{rounded}");
+        self.selection.0 = rounded;
     }
 
     pub fn request_redraw(&mut self) {

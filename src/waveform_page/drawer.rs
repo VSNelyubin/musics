@@ -89,6 +89,20 @@ impl Transform {
         // y -= self.pos.y;
         nr_vec(x, y)
     }
+
+    pub fn get_pos(&self, pos: f32) -> usize {
+        let scaled = pos / self.scale.x;
+        println!("{}", scaled);
+        let scaled = (scaled + 0.5) as i64;
+        println!("{}", scaled);
+        if scaled < 0 {
+            self.middle_idx.checked_sub((-scaled) as usize).unwrap_or(0)
+        } else {
+            self.middle_idx
+                .checked_add(scaled as usize)
+                .unwrap_or(usize::MAX)
+        }
+    }
 }
 
 impl Default for Transform {
@@ -132,8 +146,13 @@ impl<'w> WaveformDrawer<'w> {
         // Point::new(x, y)
     }
 
-    #[allow(unused)]
-    fn get_point_2(&self, pos: usize, bounds: Rectangle) -> Option<NRVec> {
+    fn get_point_y(&self, pos: usize) -> f32 {
+        let y_1: i16 = self.parent.data[pos]; //.try_into().expect("ints convert");
+        let y: f32 = y_1.try_into().expect("floats convert");
+        y * self.parent.transform.scale.y
+    }
+
+    fn get_point_x(&self, pos: usize, bounds: Rectangle) -> Option<f32> {
         let off = self.parent.transform.middle_idx; //.min(pos);
         let i64_x: i64 = if let (Ok(s_pos), Ok(s_off)) = (pos.try_into(), off.try_into()) {
             let poss: i64 = s_pos;
@@ -164,12 +183,66 @@ impl<'w> WaveformDrawer<'w> {
         let i16_x: i16 = i64_x.try_into().ok()?;
         let f32_x: f32 = i16_x.try_into().ok()?;
         let scaled_x = f32_x * self.parent.transform.scale.x;
-        let y_1: i16 = self.parent.data[pos]; //.try_into().expect("ints convert");
-        let y: f32 = y_1.try_into().expect("floats convert");
-        let scaled_y = y * self.parent.transform.scale.y;
+        let point = nr_vec(scaled_x, 0.0);
+        let ofpoint = point - nr_vec(0.0, point.y) + bounds.center();
+        bounds.contains(ofpoint.into()).then_some(scaled_x)
+    }
+
+    #[allow(unused)]
+    fn get_point_2(&self, pos: usize, bounds: Rectangle) -> Option<NRVec> {
+        // let off = self.parent.transform.middle_idx; //.min(pos);
+        // let i64_x: i64 = if let (Ok(s_pos), Ok(s_off)) = (pos.try_into(), off.try_into()) {
+        //     let poss: i64 = s_pos;
+        //     let offs: i64 = s_off;
+        //     poss - offs
+        // } else {
+        //     let rez = (pos - off).try_into();
+        //     if let Ok(r) = rez {
+        //         r
+        //     } else {
+        //         return None;
+        //     }
+        // }; //offset_index
+        // if i64_x >= 0x8000 {
+        //     return None;
+        // }
+        // if i64_x <= -0x8000 {
+        //     return None;
+        // }
+        // let con_x: Option<f32> = i64_x
+        //     .try_into()
+        //     .ok()
+        //     .and_then(|i16_x: i16| i16_x.try_into().ok());
+        // if con_x.is_none() {
+        //     println!("{:x}", i64_x);
+        //     panic!("stop here");
+        // }
+        // let i16_x: i16 = i64_x.try_into().ok()?;
+        // let f32_x: f32 = i16_x.try_into().ok()?;
+        // let scaled_x = f32_x * self.parent.transform.scale.x;
+        // let y_1: i16 = self.parent.data[pos]; //.try_into().expect("ints convert");
+        // let y: f32 = y_1.try_into().expect("floats convert");
+        // let scaled_y = y * self.parent.transform.scale.y;
+
+        let scaled_x = self.get_point_x(pos, bounds)?;
+        let scaled_y = self.get_point_y(pos);
+
         let point = nr_vec(scaled_x, scaled_y);
         let ofpoint = point - nr_vec(0.0, point.y) + bounds.center();
-        bounds.contains(ofpoint.into()).then_some(point)
+        Some(point)
+        // bounds.contains(ofpoint.into()).then_some(point)
+    }
+
+    fn selection_lines(&self, bounds: Rectangle) -> (Option<Path>, Option<Path>) {
+        let x2p = |x: f32| {
+            let bot = nr_vec(x, -bounds.height / 2.0);
+            let top = nr_vec(x, bounds.height / 2.0);
+            Path::line(bot.into(), top.into())
+        };
+        (
+            self.get_point_x(self.parent.selection.0, bounds).map(x2p),
+            self.get_point_x(self.parent.selection.1, bounds).map(x2p),
+        )
     }
 
     fn path(&self, bounds: Rectangle) -> Path {
@@ -257,6 +330,7 @@ impl Program<MesDummies> for WaveformDrawer<'_> {
                                 },
                             })
                         }
+                        // WDStates::Selecting
                         WDStates::Idle => Some(MesDummies::ForceRedraw),
                         _ => None,
                     },
@@ -273,8 +347,8 @@ impl Program<MesDummies> for WaveformDrawer<'_> {
                             mouse::Button::Left => {
                                 *_state = WDStates::Selecting;
                                 let mut begin: NRVec = cursor_position.into();
-                                begin.x /= _bounds.width;
-                                begin.y /= _bounds.height;
+                                begin.x -= _bounds.width / 2.0;
+                                begin.y -= _bounds.height / 2.0;
                                 Some(MesDummies::SelectBegin { begin })
                             }
                             _ => None,
@@ -328,8 +402,13 @@ impl Program<MesDummies> for WaveformDrawer<'_> {
             - bounds.center()
             + bounds.position();
 
-        let stroke = Stroke::default().with_color(color).with_width(1.0);
+        let stroke = Stroke::default()
+            .with_color(color)
+            .with_width(1.0)
+            .with_line_join(iced::widget::canvas::LineJoin::Bevel);
         let grid_style = Stroke::default().with_color(Color::from_rgba8(200, 200, 200, 0.75));
+
+        let select_style = Stroke::default().with_color(Color::from_rgba8(100, 50, 200, 0.75));
 
         let content = self.parent.cache.draw(renderer, bounds.size(), |frame| {
             // let (w, h) = (frame.size().width, frame.size().height);
@@ -384,6 +463,14 @@ impl Program<MesDummies> for WaveformDrawer<'_> {
             //     );
             // }
             frame.stroke(&self.path(bounds), stroke);
+
+            let bounds = self.selection_lines(bounds);
+            if let Some(left) = &bounds.0 {
+                frame.stroke(left, select_style.clone());
+            }
+            if let Some(right) = &bounds.1 {
+                frame.stroke(right, select_style);
+            }
         });
         vec![content]
     }

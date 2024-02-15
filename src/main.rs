@@ -93,7 +93,10 @@ impl Sandbox for Adio {
                 self.pages[self.cur_page].request_redraw();
             }
 
-            MesDummies::SelectBegin { begin } => println!("select begin from {:?}", begin),
+            MesDummies::SelectBegin { begin } => {
+                self.pages[self.cur_page].select_begin(begin);
+                println!("select begin from {:?}", begin)
+            }
             MesDummies::SelectEnd { end } => println!("select  end   at  {:?}", end),
 
             MesDummies::ForceRedraw => self.pages[self.cur_page].request_redraw(),
