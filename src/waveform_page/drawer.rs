@@ -1,3 +1,4 @@
+use iced::futures::future::select;
 use iced::mouse::ScrollDelta;
 use iced::widget::canvas::event::{self, Event as CanEvent};
 use iced::{
@@ -15,7 +16,7 @@ use tracing_subscriber::field::display::Messages;
 use crate::not_retarded_vector::nr_vec;
 use crate::{not_retarded_vector, MesDummies};
 
-use super::WaveformPage;
+use super::{Audi, WaveformPage};
 
 use not_retarded_vector::NRVec;
 
@@ -92,16 +93,36 @@ impl Transform {
 
     pub fn get_pos(&self, pos: f32) -> usize {
         let scaled = pos / self.scale.x;
-        println!("{}", scaled);
         let scaled = (scaled + 0.5) as i64;
-        println!("{}", scaled);
         if scaled < 0 {
-            self.middle_idx.checked_sub((-scaled) as usize).unwrap_or(0)
+            self.middle_idx.saturating_sub((-scaled) as usize)
         } else {
             self.middle_idx
                 .checked_add(scaled as usize)
                 .unwrap_or(usize::MAX)
         }
+    }
+
+    pub fn get_amp(&self, high: f32) -> Audi {
+        let scaled = high / self.scale.y;
+        let scaled = (scaled + 0.5) as i64;
+        scaled.try_into().unwrap()
+    }
+
+    pub fn allign_select(&mut self, selection: (usize, usize)) {
+        let delt = selection.0.max(selection.1) - selection.0.min(selection.1);
+        self.middle_idx = selection.0.min(selection.1) + delt / 2;
+        let scale: i64 = delt.try_into().unwrap();
+        let scale: i16 = scale.try_into().unwrap();
+        let scale: f32 = scale.try_into().unwrap();
+        self.scale.x = 700.0 / (scale + 0.1) * self.scale.x.signum();
+    }
+
+    pub fn fix_negative(&mut self) {
+        self.scale = NRVec {
+            x: self.scale.x.abs(),
+            y: self.scale.y.abs(),
+        };
     }
 }
 
@@ -257,6 +278,18 @@ impl<'w> WaveformDrawer<'w> {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum WaveDrawerSig {
+    Scroll { delta: ScrollDelta },
+    ResizeBegin { begin: NRVec },
+    ResizeEnd { end: NRVec },
+    Resize { scale: NRVec },
+    SelectOrEditBegin { begin: NRVec },
+    SelectOrEditEnd { end: NRVec },
+    SelectOrEdit { mid: NRVec },
+    ForceRedraw,
+}
+
 #[derive(Debug)]
 pub enum WDStates {
     Resizing { one: NRVec },
@@ -298,13 +331,18 @@ impl Program<MesDummies> for WaveformDrawer<'_> {
             Some(pos) => pos,
             None => {
                 let message = match _state {
-                    WDStates::Resizing { one } => {
-                        (Status::Captured, Some(MesDummies::ResizeEnd { end: *one }))
-                    }
+                    WDStates::Resizing { one } => (
+                        Status::Captured,
+                        Some(MesDummies::WaveDrawerSig {
+                            wd_sig: WaveDrawerSig::ResizeEnd { end: *one },
+                        }),
+                    ),
                     WDStates::Selecting => (
                         Status::Captured,
-                        Some(MesDummies::SelectEnd {
-                            end: nr_vec(0.0, 0.0),
+                        Some(MesDummies::WaveDrawerSig {
+                            wd_sig: WaveDrawerSig::SelectOrEditEnd {
+                                end: nr_vec(0.0, 0.0),
+                            },
                         }),
                     ),
                     WDStates::Idle => (Status::Ignored, None),
@@ -323,16 +361,27 @@ impl Program<MesDummies> for WaveformDrawer<'_> {
                             let scale_y = cursor.y / one.y;
 
                             *_state = WDStates::Resizing { one: cursor };
-                            Some(MesDummies::Resize {
-                                scale: NRVec {
-                                    x: scale_x,
-                                    y: scale_y,
+                            Some(MesDummies::WaveDrawerSig {
+                                wd_sig: WaveDrawerSig::Resize {
+                                    scale: NRVec {
+                                        x: scale_x,
+                                        y: scale_y,
+                                    },
                                 },
                             })
                         }
-                        // WDStates::Selecting
-                        WDStates::Idle => Some(MesDummies::ForceRedraw),
-                        _ => None,
+                        WDStates::Selecting => {
+                            let mut mid: NRVec = cursor_position.into();
+                            mid.x -= _bounds.width / 2.0;
+                            mid.y -= _bounds.height / 2.0;
+                            Some(MesDummies::WaveDrawerSig {
+                                wd_sig: WaveDrawerSig::SelectOrEdit { mid },
+                            })
+                        }
+                        WDStates::Idle => Some(MesDummies::WaveDrawerSig {
+                            wd_sig: WaveDrawerSig::ForceRedraw,
+                        }),
+                        // _ => None,
                     },
                     mouse::Event::ButtonPressed(mouse_button) => match _state {
                         WDStates::Idle => match mouse_button {
@@ -342,14 +391,18 @@ impl Program<MesDummies> for WaveformDrawer<'_> {
                                 let begin = cursor;
                                 // self.canvas_to_position(cursor, _bounds);
                                 *_state = WDStates::Resizing { one: begin };
-                                Some(MesDummies::ResizeBegin { begin })
+                                Some(MesDummies::WaveDrawerSig {
+                                    wd_sig: WaveDrawerSig::ResizeBegin { begin },
+                                })
                             }
                             mouse::Button::Left => {
                                 *_state = WDStates::Selecting;
                                 let mut begin: NRVec = cursor_position.into();
                                 begin.x -= _bounds.width / 2.0;
                                 begin.y -= _bounds.height / 2.0;
-                                Some(MesDummies::SelectBegin { begin })
+                                Some(MesDummies::WaveDrawerSig {
+                                    wd_sig: WaveDrawerSig::SelectOrEditBegin { begin },
+                                })
                             }
                             _ => None,
                         },
@@ -360,7 +413,9 @@ impl Program<MesDummies> for WaveformDrawer<'_> {
                             if let mouse::Button::Right = mouse_button {
                                 let end = self.canvas_to_position(cursor_position.into(), _bounds);
                                 *_state = WDStates::Idle;
-                                Some(MesDummies::ResizeEnd { end })
+                                Some(MesDummies::WaveDrawerSig {
+                                    wd_sig: WaveDrawerSig::ResizeEnd { end },
+                                })
                             } else {
                                 None
                             }
@@ -369,16 +424,26 @@ impl Program<MesDummies> for WaveformDrawer<'_> {
                             if let mouse::Button::Left = mouse_button {
                                 *_state = WDStates::Idle;
                                 let mut end: NRVec = cursor_position.into();
-                                end.x /= _bounds.width;
-                                end.y /= _bounds.height;
-                                Some(MesDummies::SelectEnd { end })
+                                end.x -= _bounds.width / 2.0;
+                                end.y -= _bounds.height / 2.0;
+                                Some(MesDummies::WaveDrawerSig {
+                                    wd_sig: WaveDrawerSig::SelectOrEditEnd { end },
+                                })
                             } else {
                                 None
                             }
                         }
                         _ => None,
                     },
-                    mouse::Event::WheelScrolled { delta } => Some(MesDummies::Scroll { delta }),
+                    mouse::Event::WheelScrolled { delta } => match _state {
+                        WDStates::Resizing { .. } => None,
+                        WDStates::Selecting => Some(MesDummies::WaveDrawerSig {
+                            wd_sig: WaveDrawerSig::Scroll { delta },
+                        }),
+                        WDStates::Idle => Some(MesDummies::WaveDrawerSig {
+                            wd_sig: WaveDrawerSig::Scroll { delta },
+                        }),
+                    },
                     _ => None,
                 };
                 (event::Status::Captured, message)

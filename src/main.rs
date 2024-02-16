@@ -6,12 +6,14 @@ mod audio_player;
 pub mod not_retarded_vector;
 
 use data_loader::find_file;
-use not_retarded_vector::NRVec;
+use iced::widget::Row;
+use waveform_page::drawer::WaveDrawerSig;
+use waveform_page::WavePageSig;
 
 use crate::waveform_page::WaveformPage;
+use iced::widget::horizontal_rule;
 #[allow(unused_imports)]
 use iced::widget::{button, column, container, row, text};
-use iced::{mouse::ScrollDelta, widget::horizontal_rule};
 use iced::{Alignment, Element, Length, Sandbox, Settings}; //, Point};
 
 pub fn main() -> iced::Result {
@@ -31,20 +33,23 @@ struct Adio {
 #[derive(Debug, Clone, Copy)]
 pub enum MesDummies {
     Fatten,
-    Scroll { delta: ScrollDelta },
-    ResizeBegin { begin: NRVec },
-    ResizeEnd { end: NRVec },
-    Resize { scale: NRVec },
-    SelectBegin { begin: NRVec },
-    SelectEnd { end: NRVec },
-    ForceRedraw,
+    // Scroll { delta: ScrollDelta },
+    // ResizeBegin { begin: NRVec },
+    // ResizeEnd { end: NRVec },
+    // Resize { scale: NRVec },
+    // SelectBegin { begin: NRVec },
+    // SelectEnd { end: NRVec },
+    // Select { mid: NRVec },
+    // ForceRedraw,
     OpenFile,
     PlayAudio,
+    WaveDrawerSig { wd_sig: WaveDrawerSig },
+    WavePageSig { wp_sig: WavePageSig },
 }
 
 impl<'a> Adio {
-    fn top_menu() -> iced::widget::Row<'a, MesDummies> {
-        let menu: iced::widget::Row<'_, MesDummies> = row![
+    fn top_menu() -> Row<'a, MesDummies> {
+        let menu: Row<'_, MesDummies> = row![
             button("Import").padding(5).on_press(MesDummies::OpenFile),
             button("Play").padding(5).on_press(MesDummies::PlayAudio)
         ]
@@ -78,29 +83,43 @@ impl Sandbox for Adio {
             MesDummies::Fatten => {
                 // self.hide_audio = !self.hide_audio;
                 self.cur_page = 1 - self.cur_page;
-                self.pages[self.cur_page].request_redraw();
                 // self.pages[self.cur_page].append_noise(16);
             }
-            MesDummies::Scroll { delta } => {
-                self.pages[self.cur_page].scroll(delta);
-                self.pages[self.cur_page].request_redraw();
+            // MesDummies::Scroll { delta } => {
+            //     self.pages[self.cur_page].scroll(delta);
+            //     self.pages[self.cur_page].request_redraw();
+            // }
+            // MesDummies::ResizeBegin { begin } => println!("resize begin from {:?}", begin),
+            // MesDummies::ResizeEnd { end } => println!("resize  end   at  {:?}", end),
+
+            // MesDummies::Resize { scale } => {
+            //     self.pages[self.cur_page].scale(scale);
+            //     self.pages[self.cur_page].request_redraw();
+            // }
+
+            // MesDummies::SelectBegin { begin } => {
+            //     self.pages[self.cur_page].select_begin(begin);
+            //     // println!("select begin from {:?}", begin)
+            //     self.pages[self.cur_page].request_redraw();
+            // }
+            // MesDummies::Select { mid } => {
+            //     self.pages[self.cur_page].select_end(mid);
+            //     self.pages[self.cur_page].request_redraw();
+            // }
+            // MesDummies::SelectEnd { end } => {
+            //     self.pages[self.cur_page].select_end(end);
+            //     self.pages[self.cur_page].fix_select();
+            //     // println!("select  end   at  {:?}", end);
+            //     self.pages[self.cur_page].request_redraw();
+            // }
+
+            // MesDummies::ForceRedraw => self.pages[self.cur_page].request_redraw(),
+            MesDummies::WavePageSig { wp_sig } => {
+                self.pages[self.cur_page].process_page_signal(wp_sig)
             }
-            MesDummies::ResizeBegin { begin } => println!("resize begin from {:?}", begin),
-            MesDummies::ResizeEnd { end } => println!("resize  end   at  {:?}", end),
-
-            MesDummies::Resize { scale } => {
-                self.pages[self.cur_page].scale(scale);
-                self.pages[self.cur_page].request_redraw();
+            MesDummies::WaveDrawerSig { wd_sig } => {
+                self.pages[self.cur_page].process_wave_drawer_sig(wd_sig)
             }
-
-            MesDummies::SelectBegin { begin } => {
-                self.pages[self.cur_page].select_begin(begin);
-                println!("select begin from {:?}", begin)
-            }
-            MesDummies::SelectEnd { end } => println!("select  end   at  {:?}", end),
-
-            MesDummies::ForceRedraw => self.pages[self.cur_page].request_redraw(),
-
             MesDummies::OpenFile => {
                 let (data, sample_rate, channels) = find_file();
                 if data.is_empty() {
