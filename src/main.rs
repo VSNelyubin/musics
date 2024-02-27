@@ -1,3 +1,4 @@
+pub mod spectrum_page;
 pub mod waveform_page;
 
 mod data_loader;
@@ -7,6 +8,7 @@ pub mod not_retarded_vector;
 
 use data_loader::find_file;
 use iced::widget::Row;
+use spectrum_page::SpectrumPage;
 use waveform_page::drawer::WaveDrawerSig;
 use waveform_page::WavePageSig;
 
@@ -23,24 +25,60 @@ pub fn main() -> iced::Result {
     })
 }
 
+pub enum Pages {
+    Wave(WaveformPage),
+    Spec(SpectrumPage),
+}
+
+impl Pages {
+    fn new_wedge(len: usize, focus: i16) -> Self {
+        Self::Wave(WaveformPage::new_wedge(len, focus))
+    }
+    fn new_noisy(len: usize) -> Self {
+        Self::Wave(WaveformPage::new_noisy(len))
+    }
+    fn new_widh_data(data: Vec<i16>, sample_rate: u32, channels: u16) -> Self {
+        Self::Wave(WaveformPage::new_widh_data(data, sample_rate, channels))
+    }
+    fn process_page_signal(&mut self, signal: WavePageSig) {
+        if let Self::Wave(wave) = self {
+            wave.process_page_signal(signal)
+        } else {
+            panic!()
+        }
+    }
+    fn process_wave_drawer_sig(&mut self, signal: WaveDrawerSig) {
+        if let Self::Wave(wave) = self {
+            wave.process_wave_drawer_sig(signal)
+        } else {
+            panic!()
+        }
+    }
+    fn play_audio(&self) {
+        if let Self::Wave(wave) = self {
+            wave.play_audio()
+        } else {
+            panic!()
+        }
+    }
+    fn view(&self) -> Element<'_, MesDummies> {
+        match self {
+            Self::Wave(wave) => wave.view(),
+            Self::Spec(spec) => spec.view(),
+        }
+    }
+}
+
 #[derive(Default)]
 struct Adio {
     // hide_audio: bool,
-    pages: Vec<WaveformPage>,
+    pages: Vec<Pages>,
     cur_page: usize,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum MesDummies {
     Fatten,
-    // Scroll { delta: ScrollDelta },
-    // ResizeBegin { begin: NRVec },
-    // ResizeEnd { end: NRVec },
-    // Resize { scale: NRVec },
-    // SelectBegin { begin: NRVec },
-    // SelectEnd { end: NRVec },
-    // Select { mid: NRVec },
-    // ForceRedraw,
     OpenFile,
     PlayAudio,
     WaveDrawerSig { wd_sig: WaveDrawerSig },
@@ -51,7 +89,8 @@ impl<'a> Adio {
     fn top_menu() -> Row<'a, MesDummies> {
         let menu: Row<'_, MesDummies> = row![
             button("Import").padding(5).on_press(MesDummies::OpenFile),
-            button("Play").padding(5).on_press(MesDummies::PlayAudio)
+            button("Play").padding(5).on_press(MesDummies::PlayAudio),
+            button("Flip Page").padding(5).on_press(MesDummies::Fatten)
         ]
         .spacing(5)
         .padding(5)
@@ -65,8 +104,8 @@ impl Sandbox for Adio {
 
     fn new() -> Self {
         let mut res = Adio::default();
-        res.pages.push(WaveformPage::new_wedge(64, 32));
-        res.pages.push(WaveformPage::new_noisy(128));
+        res.pages.push(Pages::new_wedge(64, 32));
+        res.pages.push(Pages::new_noisy(128));
         res
     }
 
@@ -85,35 +124,6 @@ impl Sandbox for Adio {
                 self.cur_page = 1 - self.cur_page;
                 // self.pages[self.cur_page].append_noise(16);
             }
-            // MesDummies::Scroll { delta } => {
-            //     self.pages[self.cur_page].scroll(delta);
-            //     self.pages[self.cur_page].request_redraw();
-            // }
-            // MesDummies::ResizeBegin { begin } => println!("resize begin from {:?}", begin),
-            // MesDummies::ResizeEnd { end } => println!("resize  end   at  {:?}", end),
-
-            // MesDummies::Resize { scale } => {
-            //     self.pages[self.cur_page].scale(scale);
-            //     self.pages[self.cur_page].request_redraw();
-            // }
-
-            // MesDummies::SelectBegin { begin } => {
-            //     self.pages[self.cur_page].select_begin(begin);
-            //     // println!("select begin from {:?}", begin)
-            //     self.pages[self.cur_page].request_redraw();
-            // }
-            // MesDummies::Select { mid } => {
-            //     self.pages[self.cur_page].select_end(mid);
-            //     self.pages[self.cur_page].request_redraw();
-            // }
-            // MesDummies::SelectEnd { end } => {
-            //     self.pages[self.cur_page].select_end(end);
-            //     self.pages[self.cur_page].fix_select();
-            //     // println!("select  end   at  {:?}", end);
-            //     self.pages[self.cur_page].request_redraw();
-            // }
-
-            // MesDummies::ForceRedraw => self.pages[self.cur_page].request_redraw(),
             MesDummies::WavePageSig { wp_sig } => {
                 self.pages[self.cur_page].process_page_signal(wp_sig)
             }
@@ -125,8 +135,7 @@ impl Sandbox for Adio {
                 if data.is_empty() {
                     return;
                 }
-                self.pages[self.cur_page] =
-                    WaveformPage::new_widh_data(data, sample_rate, channels);
+                self.pages[self.cur_page] = Pages::new_widh_data(data, sample_rate, channels);
             }
             MesDummies::PlayAudio => {
                 self.pages[self.cur_page].play_audio();

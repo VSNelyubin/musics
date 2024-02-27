@@ -6,7 +6,7 @@ use iced::advanced::renderer;
 use iced::advanced::widget::{self, Widget};
 use iced::mouse::{self, ScrollDelta};
 use iced::widget::canvas::Cache;
-use iced::widget::{button, column, row, vertical_rule, Canvas};
+use iced::widget::{button, column, row, text_input, vertical_rule, Canvas};
 use iced::{Element, Length, Rectangle, Renderer, Size, Theme}; //, Vector, Point};
 
 use rand::Rng;
@@ -45,21 +45,13 @@ pub struct WaveformPage {
     edit_last_pos: Option<usize>,
 }
 
-// impl Default for WaveformPage {
-//     fn default() -> Self {
-//         WaveformPage {
-//             data: Vec::default(),
-//             transform: Transform::default(),
-//             cache: Cache::default(),
-//         }
-//     }
-// }
-
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum WavePageSig {
     AllignSelect,
     FixNegScale,
     ToggleEditMode,
+    ResetView,
+    FormulaChanged(String),
 }
 
 impl WaveformPage {
@@ -140,7 +132,7 @@ impl WaveformPage {
 
     fn select_end(&mut self, begin: NRVec) {
         let rounded = self.transform.get_pos(begin.x);
-        self.selection.1 = rounded;
+        self.selection.1 = rounded.min(self.data.len() - 1);
     }
 
     fn fix_select(&mut self) {
@@ -151,11 +143,33 @@ impl WaveformPage {
 
     fn edit(&mut self, mid: NRVec) {
         let pos = self.transform.get_pos(mid.x);
-        self.data[pos] = self.transform.get_amp(mid.y);
-        if let Some(pos_old) = &self.edit_last_pos {
-            for (fac, i_pos) in (*pos_old..pos).enumerate() {}
+        let pos = pos.min(self.selection.1).max(self.selection.0);
+        self.write_data(pos, self.transform.get_amp(mid.y));
+        if let Some(pos_old) = self.edit_last_pos {
+            let (begin, end) = if pos_old < pos {
+                (pos_old, pos)
+            } else {
+                (pos, pos_old)
+            };
+            // println!("{start} - {end}");
+            for (fac, i_pos) in (begin..end).enumerate().skip(1) {
+                let factor = fac as f32 / (end - begin) as f32;
+                let factor = if factor.is_nan() { 1.0 } else { factor };
+                // print!("{:1.2} ",factor);
+                // print!("{:2} ", fac);
+                let val = self.data[end] as f32 * factor + self.data[begin] as f32 * (1.0 - factor);
+                // let val = self.transform.get_amp(mid.y);
+                self.write_data(i_pos, val as i16);
+            }
+            // println!();
         }
         self.edit_last_pos = Some(pos);
+    }
+
+    fn write_data(&mut self, pos: usize, sample: i16) {
+        if self.selection.0 <= pos && pos <= self.selection.1 {
+            self.data[pos] = sample;
+        }
     }
 
     fn request_redraw(&mut self) {
@@ -176,10 +190,17 @@ impl WaveformPage {
         let toggle_edit = MesDummies::WavePageSig {
             wp_sig: WavePageSig::ToggleEditMode,
         };
+        let reset_view = MesDummies::WavePageSig {
+            wp_sig: WavePageSig::ResetView,
+        };
+        let formula_edit = |string: String| MesDummies::WavePageSig {
+            wp_sig: WavePageSig::FormulaChanged(string),
+        };
         let pdd = 5;
+        let but_reset_view = button("Reset View").padding(pdd).on_press(reset_view);
         let but_allign = button("Allign to select")
             .padding(pdd)
-            .on_press(allign_select);
+            .on_press_maybe((self.selection.0 != self.selection.1).then_some(allign_select));
         let but_fix_negative = button("Flip negative scale")
             .padding(pdd)
             .on_press(fix_neg_scale);
@@ -190,10 +211,19 @@ impl WaveformPage {
         })
         .padding(pdd)
         .on_press(toggle_edit);
-        let menu = column![but_allign, but_fix_negative, but_edit_toggle]
-            .spacing(pdd)
-            .padding(pdd)
-            .width(Length::Shrink);
+        let formula_editor = text_input("s[0]=m", "s[0]=m")
+            .width(256)
+            .on_input(formula_edit);
+        let menu = column![
+            but_reset_view,
+            but_allign,
+            but_fix_negative,
+            but_edit_toggle,
+            formula_editor
+        ]
+        .spacing(pdd)
+        .padding(pdd)
+        .width(Length::Shrink);
         menu.into()
     }
 
@@ -230,6 +260,8 @@ impl WaveformPage {
                     self.select_begin(begin);
                     // println!("select begin from {:?}", begin)
                     self.request_redraw();
+                } else {
+                    self.edit_last_pos = None;
                 }
             }
             SelectOrEdit { mid } => {
@@ -246,6 +278,8 @@ impl WaveformPage {
                     self.fix_select();
                     // println!("select  end   at  {:?}", end);
                     self.request_redraw();
+                } else {
+                    self.edit_last_pos = None;
                 }
             }
 
@@ -259,6 +293,8 @@ impl WaveformPage {
             AllignSelect => self.transform.allign_select(self.selection),
             FixNegScale => self.transform.fix_negative(),
             ToggleEditMode => self.edit_mode = !self.edit_mode,
+            ResetView => self.transform = Transform::default(),
+            FormulaChanged(_string) => (),
         }
         self.request_redraw();
     }

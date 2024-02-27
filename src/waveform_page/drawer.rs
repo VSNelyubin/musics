@@ -93,7 +93,8 @@ impl Transform {
 
     pub fn get_pos(&self, pos: f32) -> usize {
         let scaled = pos / self.scale.x;
-        let scaled = (scaled + 0.5) as i64;
+        let scaled = scaled + scaled.signum() / 2.0;
+        let scaled = scaled as i64;
         if scaled < 0 {
             self.middle_idx.saturating_sub((-scaled) as usize)
         } else {
@@ -106,7 +107,9 @@ impl Transform {
     pub fn get_amp(&self, high: f32) -> Audi {
         let scaled = high / self.scale.y;
         let scaled = (scaled + 0.5) as i64;
-        scaled.try_into().unwrap()
+        scaled
+            .try_into()
+            .unwrap_or(if high > 0.0 { Audi::MAX } else { Audi::MIN })
     }
 
     pub fn allign_select(&mut self, selection: (usize, usize)) {

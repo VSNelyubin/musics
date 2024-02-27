@@ -16,3 +16,4 @@ rodio = "0.17.3"
 rustc-hash = "1.1.0"
 symphonia = {version="0.5.3", features = ["all-codecs"]}
 tracing-subscriber = "0.3.18"
+vector2d = "2.2.0"

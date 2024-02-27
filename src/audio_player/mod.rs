@@ -20,13 +20,13 @@ pub fn play_i16_audio(data: &[i16], sample_rate: u32, channels: u16) {
     // let sink_clone = Arc::clone(&sinc);
 
     let thread = thread::spawn(move || {
-        println!("threded");
+        // println!("threded");
         let sink = sinc.lock().unwrap();
-        println!("begin playing");
+        // println!("begin playing");
         sink.sleep_until_end();
-        println!("sound ended");
+        // println!("sound ended");
     });
-    println!("idc");
+    // println!("idc");
     thread.join().unwrap();
-    println!("idk");
+    // println!("idk");
 }
