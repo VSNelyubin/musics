@@ -1,7 +1,7 @@
 #![allow(unused_imports)]
 pub mod ast;
 pub mod drawer;
-pub mod parser;
+mod parser;
 use iced::advanced::graphics::color;
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::renderer;
@@ -20,6 +20,7 @@ use crate::not_retarded_vector::NRVec;
 use crate::MesDummies;
 
 use self::drawer::{Transform, WaveDrawerSig, WaveformDrawer};
+use self::parser::FormChild;
 
 type Audi = i16;
 
@@ -45,6 +46,7 @@ pub struct WaveformPage {
     channels: u16,
     edit_mode: bool,
     edit_last_pos: Option<usize>,
+    parser:parser::FormChild,
 }
 
 #[derive(Debug, Clone)]
@@ -69,6 +71,7 @@ impl WaveformPage {
             selection: (0, 0),
             edit_mode: false,
             edit_last_pos: None,
+            parser: FormChild::default(),
         }
     }
 
@@ -96,6 +99,7 @@ impl WaveformPage {
             selection: (0, 0),
             edit_mode: false,
             edit_last_pos: None,
+            parser: FormChild::default(),
         }
     }
 
@@ -109,6 +113,7 @@ impl WaveformPage {
             selection: (0, 0),
             edit_mode: false,
             edit_last_pos: None,
+            parser: FormChild::default(),
         }
     }
 
@@ -182,7 +187,7 @@ impl WaveformPage {
         WaveformDrawer::new(self)
     }
 
-    fn side_menu(&self) -> Element<'static, MesDummies> {
+    fn side_menu(&self) -> Element<MesDummies> {
         let allign_select = MesDummies::WavePageSig {
             wp_sig: WavePageSig::AllignSelect,
         };
@@ -216,7 +221,7 @@ impl WaveformPage {
         // let formula_editor = text_input("[0]=m", "s[0]=m")
         //     .width(256)
         //     .on_input(formula_edit);
-        let formula_editor = parser::parser_element();
+        let formula_editor = self.parser.element();
         let menu = column![
             but_reset_view,
             but_allign,

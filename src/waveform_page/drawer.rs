@@ -214,40 +214,6 @@ impl<'w> WaveformDrawer<'w> {
 
     #[allow(unused)]
     fn get_point_2(&self, pos: usize, bounds: Rectangle) -> Option<NRVec> {
-        // let off = self.parent.transform.middle_idx; //.min(pos);
-        // let i64_x: i64 = if let (Ok(s_pos), Ok(s_off)) = (pos.try_into(), off.try_into()) {
-        //     let poss: i64 = s_pos;
-        //     let offs: i64 = s_off;
-        //     poss - offs
-        // } else {
-        //     let rez = (pos - off).try_into();
-        //     if let Ok(r) = rez {
-        //         r
-        //     } else {
-        //         return None;
-        //     }
-        // }; //offset_index
-        // if i64_x >= 0x8000 {
-        //     return None;
-        // }
-        // if i64_x <= -0x8000 {
-        //     return None;
-        // }
-        // let con_x: Option<f32> = i64_x
-        //     .try_into()
-        //     .ok()
-        //     .and_then(|i16_x: i16| i16_x.try_into().ok());
-        // if con_x.is_none() {
-        //     println!("{:x}", i64_x);
-        //     panic!("stop here");
-        // }
-        // let i16_x: i16 = i64_x.try_into().ok()?;
-        // let f32_x: f32 = i16_x.try_into().ok()?;
-        // let scaled_x = f32_x * self.parent.transform.scale.x;
-        // let y_1: i16 = self.parent.data[pos]; //.try_into().expect("ints convert");
-        // let y: f32 = y_1.try_into().expect("floats convert");
-        // let scaled_y = y * self.parent.transform.scale.y;
-
         let scaled_x = self.get_point_x(pos, bounds)?;
         let scaled_y = self.get_point_y(pos);
 
@@ -271,9 +237,6 @@ impl<'w> WaveformDrawer<'w> {
 
     fn path(&self, bounds: Rectangle) -> Path {
         let mut res = Builder::new();
-        // for pos in 0..self.parent.data.len() {
-        //     res.line_to(self.get_point(pos, bounds).into());
-        // }
         for pnt in (0..self.parent.data.len()).filter_map(|pos| self.get_point_2(pos, bounds)) {
             res.line_to(pnt.into());
         }

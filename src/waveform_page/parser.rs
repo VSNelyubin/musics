@@ -1,4 +1,4 @@
-use iced::{widget::text_input, Element};
+use iced::{widget::{text_editor::{self, Content}, TextEditor}, Element};
 use lalrpop_util::lalrpop_mod;
 use std::{
     collections::{HashMap, HashSet},
@@ -165,18 +165,53 @@ impl Expr {
     }
 }
 
-use iced::widget::{button, column, container, horizontal_space, pick_list, row, text, tooltip};
-
+#[derive(Debug)]
 pub struct FormChild {
-    content: text_editor::Content,
+    string: String,
+    content:Content,
 }
 
-pub fn parser_element() -> Element<'static, MesDummies> {
-    let formula_edit = |string: String| MesDummies::WavePageSig {
-        wp_sig: super::WavePageSig::FormulaChanged(string),
-    };
-    let formula_editor = text_input("[0]=m", "s[0]=m")
-        .width(256)
-        .on_input(formula_edit);
-    formula_editor.into()
+impl Default for FormChild {
+    fn default() -> Self {
+        Self {
+            string: "[0]=$m".to_string(),
+            content:Content::new(),
+        }
+    }
 }
+
+impl FormChild {
+    pub fn element(&self) -> Element<MesDummies> {
+        let formula_edit = |act:iced::widget::text_editor::Action| match act{
+            text_editor::Action::Move(_) => todo!(),
+            text_editor::Action::Select(_) => todo!(),
+            text_editor::Action::SelectWord => todo!(),
+            text_editor::Action::SelectLine => todo!(),
+            text_editor::Action::Edit(s) => match s{
+                text_editor::Edit::Insert(_) => todo!(),
+                text_editor::Edit::Paste(_) => todo!(),
+                text_editor::Edit::Enter => todo!(),
+                text_editor::Edit::Backspace => todo!(),
+                text_editor::Edit::Delete => todo!(),
+            },
+            text_editor::Action::Click(_) => todo!(),
+            text_editor::Action::Drag(_) => todo!(),
+            text_editor::Action::Scroll { lines } => todo!(),
+            
+        // };MesDummies::WavePageSig {
+        //     wp_sig: super::WavePageSig::FormulaChanged(string),
+        };
+        let formula_editor=TextEditor::new(&self.content).on_action(formula_edit);
+        formula_editor.into()
+    }
+}
+
+// pub fn parser_element() -> Element<'static, MesDummies> {
+//     let formula_edit = |string: String| MesDummies::WavePageSig {
+//         wp_sig: super::WavePageSig::FormulaChanged(string),
+//     };
+//     let formula_editor = text_input("[0]=m", "s[0]=m")
+//         .width(256)
+//         .on_input(formula_edit);
+//     formula_editor.into()
+// }
