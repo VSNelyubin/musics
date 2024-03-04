@@ -5,7 +5,12 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[build-dependencies] # <-- We added this and everything after!
+lalrpop = "0.20.2"
+
 [dependencies]
+lalrpop = "0.20.2"
+lalrpop-util = { version = "0.20.2", features = ["lexer", "unicode"] }
 audrey = "0.3.0"
 iced = {version="0.10.0", features = ["canvas", "tokio", "debug", "advanced"]}
 iced_audio = "0.12.0"
@@ -17,3 +22,4 @@ rustc-hash = "1.1.0"
 symphonia = {version="0.5.3", features = ["all-codecs"]}
 tracing-subscriber = "0.3.18"
 vector2d = "2.2.0"
+

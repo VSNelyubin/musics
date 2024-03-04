@@ -1,4 +1,4 @@
-pub mod spectrum_page;
+// pub mod spectrum_page;
 pub mod waveform_page;
 
 mod data_loader;
@@ -8,7 +8,7 @@ pub mod not_retarded_vector;
 
 use data_loader::find_file;
 use iced::widget::Row;
-use spectrum_page::SpectrumPage;
+// use spectrum_page::SpectrumPage;
 use waveform_page::drawer::WaveDrawerSig;
 use waveform_page::WavePageSig;
 
@@ -27,9 +27,11 @@ pub fn main() -> iced::Result {
 
 pub enum Pages {
     Wave(WaveformPage),
-    Spec(SpectrumPage),
+    // Spec(SpectrumPage),
+    OOga,
 }
 
+#[allow(dead_code)]
 impl Pages {
     fn new_wedge(len: usize, focus: i16) -> Self {
         Self::Wave(WaveformPage::new_wedge(len, focus))
@@ -64,7 +66,8 @@ impl Pages {
     fn view(&self) -> Element<'_, MesDummies> {
         match self {
             Self::Wave(wave) => wave.view(),
-            Self::Spec(spec) => spec.view(),
+            // Self::Spec(spec) => spec.view(),
+            _ => panic!(),
         }
     }
 }
@@ -90,7 +93,7 @@ impl<'a> Adio {
         let menu: Row<'_, MesDummies> = row![
             button("Import").padding(5).on_press(MesDummies::OpenFile),
             button("Play").padding(5).on_press(MesDummies::PlayAudio),
-            button("Flip Page").padding(5).on_press(MesDummies::Fatten)
+            // button("Flip Page").padding(5).on_press(MesDummies::Fatten)
         ]
         .spacing(5)
         .padding(5)
@@ -105,7 +108,7 @@ impl Sandbox for Adio {
     fn new() -> Self {
         let mut res = Adio::default();
         res.pages.push(Pages::new_wedge(64, 32));
-        res.pages.push(Pages::new_noisy(128));
+        // res.pages.push(Pages::new_noisy(128));
         res
     }
 

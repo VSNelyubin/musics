@@ -1,5 +1,7 @@
 #![allow(unused_imports)]
+pub mod ast;
 pub mod drawer;
+pub mod parser;
 use iced::advanced::graphics::color;
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::renderer;
@@ -193,9 +195,9 @@ impl WaveformPage {
         let reset_view = MesDummies::WavePageSig {
             wp_sig: WavePageSig::ResetView,
         };
-        let formula_edit = |string: String| MesDummies::WavePageSig {
-            wp_sig: WavePageSig::FormulaChanged(string),
-        };
+        // let formula_edit = |string: String| MesDummies::WavePageSig {
+        //     wp_sig: WavePageSig::FormulaChanged(string),
+        // };
         let pdd = 5;
         let but_reset_view = button("Reset View").padding(pdd).on_press(reset_view);
         let but_allign = button("Allign to select")
@@ -211,9 +213,10 @@ impl WaveformPage {
         })
         .padding(pdd)
         .on_press(toggle_edit);
-        let formula_editor = text_input("s[0]=m", "s[0]=m")
-            .width(256)
-            .on_input(formula_edit);
+        // let formula_editor = text_input("[0]=m", "s[0]=m")
+        //     .width(256)
+        //     .on_input(formula_edit);
+        let formula_editor = parser::parser_element();
         let menu = column![
             but_reset_view,
             but_allign,

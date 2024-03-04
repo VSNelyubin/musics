@@ -1,0 +1,75 @@
+use std::str::FromStr;
+use crate::waveform_page::ast::*;
+
+grammar;
+
+pub Formula: Vec<Statement> ={
+    <mut v:(<Stat> ";")*> <e:Stat?> => match e { // (1)
+        None=> v,
+        Some(e) => {
+            v.push(e);
+            v
+        }
+    }
+}
+
+Num: i64 = <s:r"[+-]?[0-9]+"> => i64::from_str(s).unwrap();
+
+Float: f32 = <s:r"[+-]?[0-9]*[.]([0-9]+)?"> => f32::from_str(s).unwrap();
+
+ArrAcc: i64 = "w[" <t:Num> "]" => t;
+
+Var: String = <s:r"[a-zA-Z]([a-zA-Z0-9]+)?"> => s.to_string();
+
+Targ: Targets ={
+    <n:ArrAcc> => Targets::ArrAcc(n),
+    <v:Var> => Targets::Var(v),
+};
+
+Opr: Opr ={
+    "*" => Opr::Mul,
+    "/" => Opr::Div,
+    "+" => Opr::Add,
+    "-" => Opr::Sub,
+};
+
+SaFunc: SaFunc ={
+    "Sin"=>SaFunc::Sin,
+    "Cos"=>SaFunc::Cos,
+    "Tahn"=>SaFunc::Tahn,
+    "Tg"=>SaFunc::Tahn,
+};
+
+MaFunc: MaFunc ={
+    "Min"=>MaFunc::Min,
+    "Max"=>MaFunc::Max,
+    "Avg"=>MaFunc::Avg,
+    "Med"=>MaFunc::Med,
+};
+
+Comma<T>: Vec<T> = { // (0)
+    <mut v:(<T> ",")*> <e:T?> => match e { // (1)
+        None=> v,
+        Some(e) => {
+            v.push(e);
+            v
+        }
+    }
+};
+
+Bin: Expr={
+   "(" <l:Expr> <o:Opr> <r:Expr>")" => Expr::Binary{l:Box::new(l),o,r:Box::new(r)},
+}
+
+Expr: Expr ={
+    <aa:ArrAcc> => Expr::ArrAcc(aa),
+    <v:Var> => Expr::Var(v),
+    <b:Bin> => b,
+    <f:SaFunc>"("<x:Expr>")" => Expr::SaFunc{f,x:Box::new(x)},
+    <f:MaFunc>"("<xs:Comma<Expr>>")"=>Expr::MaFunc{f,xs:Box::new(xs)},
+    <f:Float>=>Expr::Float(f),
+    <i:Num>=>Expr::Float(i as f32),
+    r"&[mM](ouse)?"=>Expr::MouseVal,
+};
+
+Stat: Statement = <i:Targ> "=" <e:Expr> => Statement{target:i,expr:e};
