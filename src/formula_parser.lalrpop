@@ -13,9 +13,9 @@ pub Formula: Vec<Statement> ={
     }
 }
 
-Num: i64 = <s:r"[+-]?[0-9]+"> => i64::from_str(s).unwrap();
+Num: i64 = <s:r"-?[0-9]+"> => i64::from_str(s).unwrap();
 
-Float: f32 = <s:r"[+-]?[0-9]*[.]([0-9]+)?"> => f32::from_str(s).unwrap();
+Float: f32 = <s:r"-?[0-9]*[.]([0-9]+)?"> => f32::from_str(s).unwrap();
 
 ArrAcc: i64 = "[" <t:Num> "]" => t;
 
@@ -38,6 +38,8 @@ SaFunc: SaFunc ={
     "Cos"=>SaFunc::Cos,
     "Tahn"=>SaFunc::Tahn,
     "Tg"=>SaFunc::Tahn,
+    "Abs"=>SaFunc::Abs,
+    "Sign"=>SaFunc::Sign,
 };
 
 MaFunc: MaFunc ={
@@ -59,6 +61,7 @@ Comma<T>: Vec<T> = { // (0)
 
 Bin: Expr={
    "(" <l:Expr> <o:Opr> <r:Expr>")" => Expr::Binary{l:Box::new(l),o,r:Box::new(r)},
+   "(" <l:Expr> <r:Expr>")" => Expr::Binary{l:Box::new(l),o:Opr::Add,r:Box::new(r)},
 }
 
 Expr: Expr ={

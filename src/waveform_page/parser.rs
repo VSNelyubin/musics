@@ -1,19 +1,28 @@
-use iced::{widget::{text_editor::{self, Content}, TextEditor}, Element};
-use lalrpop_util::lalrpop_mod;
+#![allow(unused)]
+
+use iced::{
+    advanced::graphics::text::cosmic_text::rustybuzz::ttf_parser::loca,
+    widget::{
+        column, text,
+        text_editor::{self, Content, Edit},
+        TextEditor,
+    },
+    Element,
+};
+use lalrpop_util::{lalrpop_mod, lexer::Token, ParseError};
 use std::{
     collections::{HashMap, HashSet},
     f32::consts::{E, PI},
 };
 
 use crate::MesDummies;
+use lalrpop_util::ParseError::{InvalidToken, UnrecognizedToken};
 
 use super::ast::*;
 
 lalrpop_mod!(pub formula_parser); // synthesized by LALRPOP
 
 fn parse(s: &str) -> Vec<Statement> {
-    use lalrpop_util::ParseError::{InvalidToken, UnrecognizedToken};
-
     let rez = formula_parser::FormulaParser::new().parse(s);
     if let Err(e) = &rez {
         println!("{s}");
@@ -52,7 +61,7 @@ fn shmain() {
     }
     println!("{:#?}", x);
 
-    let mut data = vec![0f32; 100];
+    let mut data = vec![0i16; 100];
 
     let pos = 50usize;
     let mouse_val = 10.;
@@ -62,7 +71,7 @@ fn shmain() {
     for stat in x {
         let val = stat.expr.eval(&data, &var_registry, (pos, mouse_val));
         match stat.target {
-            Targets::ArrAcc(off) => data[summ(pos, off)] = val,
+            Targets::ArrAcc(off) => data[summ(pos, off)] = val as i16,
             Targets::Var(name) => {
                 var_registry.insert(name, val);
             }
@@ -101,10 +110,13 @@ impl Expr {
             _ => true,
         }
     }
-    fn eval(&self, data: &[f32], vars: &HashMap<String, f32>, mouse: (usize, f32)) -> f32 {
+    fn eval(&self, data: &[i16], vars: &HashMap<String, f32>, mouse: (usize, f32)) -> f32 {
         match self {
             Expr::MouseVal => mouse.1,
-            Expr::ArrAcc(off) => *data.get(summ(mouse.0, *off)).unwrap_or(&0.),
+            Expr::ArrAcc(off) => {
+                let x: i16 = *data.get(summ(mouse.0, *off)).unwrap_or(&0i16);
+                x.into()
+            }
             Expr::Var(name) => *vars.get(name).unwrap_or(&0.),
             Expr::Spec(s) => match s {
                 Spec::Pi => PI,
@@ -128,6 +140,8 @@ impl Expr {
                     SaFunc::Sin => v.sin(),
                     SaFunc::Cos => v.cos(),
                     SaFunc::Tahn => v.tan(),
+                    SaFunc::Abs => v.abs(),
+                    SaFunc::Sign => v.signum(),
                 }
             }
             Expr::MaFunc { f, xs } => {
@@ -167,51 +181,112 @@ impl Expr {
 
 #[derive(Debug)]
 pub struct FormChild {
-    string: String,
-    content:Content,
+    content: Content,
+    formula: Vec<Statement>,
+    message1: String,
+    message2: String,
 }
 
 impl Default for FormChild {
     fn default() -> Self {
         Self {
-            string: "[0]=$m".to_string(),
-            content:Content::new(),
+            content: Content::with_text("[0]=&m"),
+            formula: parse("[0]=&m"),
+            message1: "".to_string(),
+            message2: "Ok".to_string(),
         }
     }
 }
 
-impl FormChild {
-    pub fn element(&self) -> Element<MesDummies> {
-        let formula_edit = |act:iced::widget::text_editor::Action| match act{
-            text_editor::Action::Move(_) => todo!(),
-            text_editor::Action::Select(_) => todo!(),
-            text_editor::Action::SelectWord => todo!(),
-            text_editor::Action::SelectLine => todo!(),
-            text_editor::Action::Edit(s) => match s{
-                text_editor::Edit::Insert(_) => todo!(),
-                text_editor::Edit::Paste(_) => todo!(),
-                text_editor::Edit::Enter => todo!(),
-                text_editor::Edit::Backspace => todo!(),
-                text_editor::Edit::Delete => todo!(),
-            },
-            text_editor::Action::Click(_) => todo!(),
-            text_editor::Action::Drag(_) => todo!(),
-            text_editor::Action::Scroll { lines } => todo!(),
-            
-        // };MesDummies::WavePageSig {
-        //     wp_sig: super::WavePageSig::FormulaChanged(string),
-        };
-        let formula_editor=TextEditor::new(&self.content).on_action(formula_edit);
-        formula_editor.into()
+#[test]
+fn scans() {
+    for i in 0..10 {
+        print!("{:2} ", i);
     }
+    println!();
+    for i in (0..10).scan(0, |a, i| {
+        *a += i;
+        Some(*a)
+    }) {
+        print!("{:2} ", i);
+    }
+    println!();
 }
 
-// pub fn parser_element() -> Element<'static, MesDummies> {
-//     let formula_edit = |string: String| MesDummies::WavePageSig {
-//         wp_sig: super::WavePageSig::FormulaChanged(string),
-//     };
-//     let formula_editor = text_input("[0]=m", "s[0]=m")
-//         .width(256)
-//         .on_input(formula_edit);
-//     formula_editor.into()
-// }
+impl FormChild {
+    pub fn act(&mut self, act: text_editor::Action) {
+        let should_parse = matches!(&act, text_editor::Action::Edit(_));
+        self.content.perform(act);
+        if should_parse {
+            let text: &str = &self.content.text();
+            let rez = formula_parser::FormulaParser::new().parse(text);
+            if let Err(e) = rez {
+                self.generate_err_message(e);
+                return;
+            }
+            let rez = rez.unwrap();
+
+            if !chek_all(&rez) {
+                self.message1 = String::new();
+                self.message2 = "Undeclared variables".to_string();
+                self.formula = Vec::new();
+            } else if !rez.is_empty() {
+                self.message1 = String::new();
+                self.message2 = "Success!".to_string();
+                self.formula = rez;
+            }
+        }
+    }
+
+    fn generate_err_message(&mut self, e: ParseError<usize, Token<'_>, &str>) {
+        let (pos, msg) = match e {
+            InvalidToken { location } => (location, "bad token"),
+            ParseError::UnrecognizedEof { location, expected } => (location, "early EOF"),
+            UnrecognizedToken { token, expected } => (token.0, "bad syntax"),
+            ParseError::ExtraToken { token } => (token.0, "bad token"),
+            ParseError::User { error } => unimplemented!(),
+        };
+        let rang = 10usize;
+        let padd = vec!['_'; rang.saturating_sub(pos)];
+        let string: String = padd
+            .into_iter()
+            .chain(self.content.text().chars())
+            .skip(pos.saturating_sub(rang))
+            .take(rang * 2 + 1)
+            .map(|c| if c == '\n' { ' ' } else { c })
+            .collect();
+        self.message1 = string;
+        let spaces: String = (0..rang).map(|_| '_').collect();
+        self.message2 = format!("{spaces}^ - {msg}");
+    }
+
+    pub fn affect_data(&self, data: &mut [i16], mouse: (usize, f32)) {
+        let (pos, mouse_val) = mouse;
+        let mut var_registry: HashMap<String, f32> = HashMap::new();
+
+        for stat in &self.formula {
+            let val = stat.expr.eval(data, &var_registry, (pos, mouse_val));
+            match &stat.target {
+                Targets::ArrAcc(off) => {
+                    // println!("{:3} -> {:3}",data[summ(pos, *off)],val);
+                    data[summ(pos, *off)] = val as i16
+                }
+                Targets::Var(name) => {
+                    var_registry.insert(name.to_string(), val);
+                }
+            }
+        }
+    }
+
+    pub fn element(&self) -> Element<MesDummies> {
+        let formula_edit = |act: iced::widget::text_editor::Action| MesDummies::WavePageSig {
+            wp_sig: super::WavePageSig::FormulaChanged(act),
+        };
+        let pdd = 5;
+        let formula_editor = TextEditor::new(&self.content).on_action(formula_edit);
+        let er1 = text(self.message1.clone());
+        let er2 = text(self.message2.clone());
+        let wid = column!(formula_editor, er1, er2).spacing(pdd).padding(pdd);
+        wid.into()
+    }
+}

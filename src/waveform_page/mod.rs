@@ -46,7 +46,7 @@ pub struct WaveformPage {
     channels: u16,
     edit_mode: bool,
     edit_last_pos: Option<usize>,
-    parser:parser::FormChild,
+    parser: parser::FormChild,
 }
 
 #[derive(Debug, Clone)]
@@ -55,7 +55,7 @@ pub enum WavePageSig {
     FixNegScale,
     ToggleEditMode,
     ResetView,
-    FormulaChanged(String),
+    FormulaChanged(iced::widget::text_editor::Action),
 }
 
 impl WaveformPage {
@@ -134,7 +134,7 @@ impl WaveformPage {
 
     fn select_begin(&mut self, begin: NRVec) {
         let rounded = self.transform.get_pos(begin.x);
-        self.selection.0 = rounded;
+        self.selection.0 = rounded.min(self.data.len() - 1);
     }
 
     fn select_end(&mut self, begin: NRVec) {
@@ -175,7 +175,9 @@ impl WaveformPage {
 
     fn write_data(&mut self, pos: usize, sample: i16) {
         if self.selection.0 <= pos && pos <= self.selection.1 {
-            self.data[pos] = sample;
+            // self.data[pos] = sample;
+            self.parser
+                .affect_data(&mut self.data, (pos, sample.into()))
         }
     }
 
@@ -231,7 +233,7 @@ impl WaveformPage {
         ]
         .spacing(pdd)
         .padding(pdd)
-        .width(Length::Shrink);
+        .width(Length::Fixed(320.0));
         menu.into()
     }
 
@@ -302,7 +304,7 @@ impl WaveformPage {
             FixNegScale => self.transform.fix_negative(),
             ToggleEditMode => self.edit_mode = !self.edit_mode,
             ResetView => self.transform = Transform::default(),
-            FormulaChanged(_string) => (),
+            FormulaChanged(act) => self.parser.act(act),
         }
         self.request_redraw();
     }

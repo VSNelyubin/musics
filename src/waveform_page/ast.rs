@@ -30,6 +30,8 @@ pub enum SaFunc {
     Sin,
     Cos,
     Tahn,
+    Abs,
+    Sign,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
