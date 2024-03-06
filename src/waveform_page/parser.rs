@@ -87,46 +87,82 @@ fn summ(a: usize, b: i64) -> usize {
     }
 }
 
-fn chek_all(exprs: &[Statement]) -> bool {
-    exprs
-        .iter()
-        .scan(HashSet::new(), |a, i| {
-            let ans = i.expr.check_vars(a);
-            if let Targets::Var(s) = &i.target {
-                a.insert(s.to_string());
-            }
-            Some(ans)
-        })
-        .all(|x| x)
+/// replace all string vars with indexes, or find the first one that doesnt resolve
+fn chek_all(exprs: &mut [Statement]) -> Result<usize, String> {
+    let mut map = HashMap::new();
+    for e in exprs.iter_mut() {
+        e.expr = e.expr.checkonvert(&map)?;
+        if let Targets::Var(n) = &e.target {
+            let idx: usize = map
+                .get(n)
+                .cloned()
+                .unwrap_or_else(|| map.insert(n.to_string(), map.len()).unwrap());
+            e.target = Targets::ResVar(idx);
+        }
+    }
+    Ok(map.len())
 }
 
 impl Expr {
-    fn check_vars(&self, vars: &HashSet<String>) -> bool {
-        match self {
-            Expr::Var(v) => vars.contains(v),
-            Expr::Binary { l, r, .. } => l.check_vars(vars) && r.check_vars(vars),
-            Expr::SaFunc { x, .. } => x.check_vars(vars),
-            Expr::MaFunc { xs, .. } => xs.iter().all(|x| x.check_vars(vars)),
-            _ => true,
-        }
+    /// replace string vars with indexes, or tell which vars are undeclared
+    fn checkonvert(&self, vars: &HashMap<String, usize>) -> Result<Self, String> {
+        Ok(match self {
+            Expr::Var(v) => match vars.get(v) {
+                Some(&n) => Self::ResVar(n),
+                None => return Err(v.clone()),
+            },
+            Expr::Binary { l, r, o } => {
+                let ll = l.checkonvert(vars)?;
+                let rr = r.checkonvert(vars)?;
+                Expr::Binary {
+                    l: Box::new(ll),
+                    o: *o,
+                    r: Box::new(rr),
+                }
+            }
+            Expr::SaFunc { x, f } => Expr::SaFunc {
+                x: Box::new(x.checkonvert(vars)?),
+                f: *f,
+            },
+            Expr::MaFunc { xs, f } => {
+                let xs: Result<Vec<Expr>, String> =
+                    xs.iter().map(|x| x.checkonvert(vars)).collect();
+                Expr::MaFunc {
+                    f: *f,
+                    xs: Box::new(xs?),
+                }
+            }
+            e => e.clone(),
+        })
     }
-    fn eval(&self, data: &[i16], vars: &HashMap<String, f32>, mouse: (usize, f32)) -> f32 {
+    fn eval(
+        &self,
+        data: &[i16],
+        vars: &[f32],
+        mouse: (usize, f32),
+        selection: (usize, usize),
+    ) -> f32 {
         match self {
-            Expr::MouseVal => mouse.1,
             Expr::ArrAcc(off) => {
                 let x: i16 = *data.get(summ(mouse.0, *off)).unwrap_or(&0i16);
                 x.into()
             }
-            Expr::Var(name) => *vars.get(name).unwrap_or(&0.),
+            Expr::Var(name) => panic!("unresolved variable"), //*vars.get(name).unwrap_or(&0.),
+            Expr::ResVar(idx) => vars[*idx],
             Expr::Spec(s) => match s {
                 Spec::Pi => PI,
                 Spec::E => E,
                 Spec::Rnd => 0f32,
+                Spec::Mouse => mouse.1,
+                Spec::Time => (mouse.0 - selection.0) as f32,
+                Spec::Fac => {
+                    ((mouse.0 - selection.0) as f64 / (mouse.0 - selection.1) as f64) as f32
+                }
             },
             Expr::Float(f) => *f,
             Expr::Binary { l, o, r } => {
-                let l = l.eval(data, vars, mouse);
-                let r = r.eval(data, vars, mouse);
+                let l = l.eval(data, vars, mouse, selection);
+                let r = r.eval(data, vars, mouse, selection);
                 match o {
                     Opr::Add => l + r,
                     Opr::Sub => l - r,
@@ -135,7 +171,7 @@ impl Expr {
                 }
             }
             Expr::SaFunc { f, x } => {
-                let v = x.eval(data, vars, mouse);
+                let v = x.eval(data, vars, mouse, selection);
                 match f {
                     SaFunc::Sin => v.sin(),
                     SaFunc::Cos => v.cos(),
@@ -145,7 +181,7 @@ impl Expr {
                 }
             }
             Expr::MaFunc { f, xs } => {
-                let vs = xs.iter().map(|x| x.eval(data, vars, mouse));
+                let vs = xs.iter().map(|x| x.eval(data, vars, mouse, selection));
                 match f {
                     MaFunc::Min => vs.fold(None, |a, i| {
                         Some(if let Some(a) = a { i.min(a) } else { i })
@@ -185,6 +221,7 @@ pub struct FormChild {
     formula: Vec<Statement>,
     message1: String,
     message2: String,
+    variables: usize,
 }
 
 impl Default for FormChild {
@@ -194,6 +231,7 @@ impl Default for FormChild {
             formula: parse("[0]=&m"),
             message1: "".to_string(),
             message2: "Ok".to_string(),
+            variables: 0,
         }
     }
 }
@@ -224,16 +262,20 @@ impl FormChild {
                 self.generate_err_message(e);
                 return;
             }
-            let rez = rez.unwrap();
+            let mut rez = rez.unwrap();
 
-            if !chek_all(&rez) {
-                self.message1 = String::new();
-                self.message2 = "Undeclared variables".to_string();
-                self.formula = Vec::new();
-            } else if !rez.is_empty() {
-                self.message1 = String::new();
-                self.message2 = "Success!".to_string();
-                self.formula = rez;
+            match chek_all(&mut rez) {
+                Err(s) => {
+                    self.message1 = s.to_string();
+                    self.message2 = "Undeclared variable".to_string();
+                    self.formula = Vec::new();
+                }
+                Ok(s) => {
+                    self.message1 = String::new();
+                    self.message2 = "Success!".to_string();
+                    self.formula = rez;
+                    self.variables = 0;
+                }
             }
         }
     }
@@ -260,20 +302,26 @@ impl FormChild {
         self.message2 = format!("{spaces}^ - {msg}");
     }
 
-    pub fn affect_data(&self, data: &mut [i16], mouse: (usize, f32)) {
+    pub fn affect_data(
+        &mut self,
+        data: &mut [i16],
+        mouse: (usize, f32),
+        selection: (usize, usize),
+    ) {
         let (pos, mouse_val) = mouse;
-        let mut var_registry: HashMap<String, f32> = HashMap::new();
+        let mut variables = vec![0.; self.variables];
 
         for stat in &self.formula {
-            let val = stat.expr.eval(data, &var_registry, (pos, mouse_val));
+            let val = stat
+                .expr
+                .eval(data, &variables, (pos, mouse_val), selection);
             match &stat.target {
                 Targets::ArrAcc(off) => {
                     // println!("{:3} -> {:3}",data[summ(pos, *off)],val);
                     data[summ(pos, *off)] = val as i16
                 }
-                Targets::Var(name) => {
-                    var_registry.insert(name.to_string(), val);
-                }
+                Targets::Var(name) => panic!("target wasnt resolved"),
+                Targets::ResVar(i) => variables[*i] = val,
             }
         }
     }

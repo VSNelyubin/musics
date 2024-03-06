@@ -59,6 +59,15 @@ Comma<T>: Vec<T> = { // (0)
     }
 };
 
+Spec:Spec ={
+    r"&[mM](ouse)?" => Spec::Mouse,
+    r"&[pP]i"=>Spec::Pi,
+    r"&[eE](uler)?"=>Spec::E,
+    r"&[rR]a?nd"=>Spec::Rnd,
+    r"&[tT](ime)?"=>Spec::Time,
+    r"&[fF](ac)?"=>Spec::Fac,
+}
+
 Bin: Expr={
    "(" <l:Expr> <o:Opr> <r:Expr>")" => Expr::Binary{l:Box::new(l),o,r:Box::new(r)},
    "(" <l:Expr> <r:Expr>")" => Expr::Binary{l:Box::new(l),o:Opr::Add,r:Box::new(r)},
@@ -72,7 +81,7 @@ Expr: Expr ={
     <f:MaFunc>"("<xs:Comma<Expr>>")"=>Expr::MaFunc{f,xs:Box::new(xs)},
     <f:Float>=>Expr::Float(f),
     <i:Num>=>Expr::Float(i as f32),
-    r"&[mM](ouse)?"=>Expr::MouseVal,
+    <s:Spec>=>Expr::Spec(s),
 };
 
 Stat: Statement = <i:Targ> "=" <e:Expr> => Statement{target:i,expr:e};

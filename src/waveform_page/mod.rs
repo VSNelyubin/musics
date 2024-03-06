@@ -177,7 +177,7 @@ impl WaveformPage {
         if self.selection.0 <= pos && pos <= self.selection.1 {
             // self.data[pos] = sample;
             self.parser
-                .affect_data(&mut self.data, (pos, sample.into()))
+                .affect_data(&mut self.data, (pos, sample.into()), self.selection)
         }
     }
 

@@ -117,7 +117,7 @@ impl Transform {
         self.middle_idx = selection.0.min(selection.1) + delt / 2;
         let scale: i64 = delt.try_into().unwrap();
         let scale: i16 = scale.try_into().unwrap();
-        let scale: f32 = scale.try_into().unwrap();
+        let scale: f32 = scale.into(); //try_into().unwrap();
         self.scale.x = 700.0 / (scale + 0.1) * self.scale.x.signum();
     }
 
@@ -161,9 +161,9 @@ impl<'w> WaveformDrawer<'w> {
     #[allow(unused)]
     fn get_point(&self, pos: usize, bounds: Rectangle) -> NRVec {
         let x_1: i16 = pos.try_into().expect("ints convert");
-        let x: f32 = x_1.try_into().expect("floats convert");
+        let x: f32 = x_1.into(); //try_into().expect("floats convert");
         let y_1: i16 = self.parent.data[pos]; //.try_into().expect("ints convert");
-        let y: f32 = y_1.try_into().expect("floats convert");
+        let y: f32 = y_1.into(); //try_into().expect("floats convert");
         let x = x.round();
         let y = y.round();
         self.position_to_canvas(nr_vec(x, y), bounds)
@@ -172,7 +172,7 @@ impl<'w> WaveformDrawer<'w> {
 
     fn get_point_y(&self, pos: usize) -> f32 {
         let y_1: i16 = self.parent.data[pos]; //.try_into().expect("ints convert");
-        let y: f32 = y_1.try_into().expect("floats convert");
+        let y: f32 = y_1.into(); //try_into().expect("floats convert");
         y * self.parent.transform.scale.y
     }
 
@@ -196,16 +196,16 @@ impl<'w> WaveformDrawer<'w> {
         if i64_x <= -0x8000 {
             return None;
         }
-        let con_x: Option<f32> = i64_x
-            .try_into()
-            .ok()
-            .and_then(|i16_x: i16| i16_x.try_into().ok());
-        if con_x.is_none() {
-            println!("{:x}", i64_x);
-            panic!("stop here");
-        }
+        // let con_x: Option<f32> = i64_x
+        //     .try_into()
+        //     .ok()
+        //     .and_then(|i16_x: i16| i16_x.try_into().ok());
+        // if con_x.is_none() {
+        //     println!("{:x}", i64_x);
+        //     panic!("stop here");
+        // }
         let i16_x: i16 = i64_x.try_into().ok()?;
-        let f32_x: f32 = i16_x.try_into().ok()?;
+        let f32_x: f32 = i16_x.into(); //try_into().ok()?;
         let scaled_x = f32_x * self.parent.transform.scale.x;
         let point = nr_vec(scaled_x, 0.0);
         let ofpoint = point - nr_vec(0.0, point.y) + bounds.center();

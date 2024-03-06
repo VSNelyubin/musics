@@ -8,9 +8,10 @@ pub struct Statement {
 pub enum Targets {
     ArrAcc(i64),
     Var(String),
+    ResVar(usize),
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Opr {
     Add,
     Sub,
@@ -23,9 +24,12 @@ pub enum Spec {
     Pi,
     E,
     Rnd,
+    Mouse,
+    Time,
+    Fac,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum SaFunc {
     Sin,
     Cos,
@@ -34,7 +38,7 @@ pub enum SaFunc {
     Sign,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum MaFunc {
     Min,
     Max,
@@ -44,9 +48,9 @@ pub enum MaFunc {
 
 #[derive(Debug, Clone)]
 pub enum Expr {
-    MouseVal,
     ArrAcc(i64),
     Var(String),
+    ResVar(usize),
     Spec(Spec),
     Float(f32),
     Binary { l: Box<Expr>, o: Opr, r: Box<Expr> },
