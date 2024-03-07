@@ -7,7 +7,7 @@ use iced::{
         text_editor::{self, Content, Edit},
         TextEditor,
     },
-    Element,
+    Element, Font,
 };
 use lalrpop_util::{lalrpop_mod, lexer::Token, ParseError};
 use std::{
@@ -93,10 +93,11 @@ fn chek_all(exprs: &mut [Statement]) -> Result<usize, String> {
     for e in exprs.iter_mut() {
         e.expr = e.expr.checkonvert(&map)?;
         if let Targets::Var(n) = &e.target {
-            let idx: usize = map
-                .get(n)
-                .cloned()
-                .unwrap_or_else(|| map.insert(n.to_string(), map.len()).unwrap());
+            let idx: usize = map.get(n).cloned().unwrap_or_else(|| {
+                let v = map.len();
+                map.insert(n.to_string(), v);
+                v
+            });
             e.target = Targets::ResVar(idx);
         }
     }
@@ -274,7 +275,7 @@ impl FormChild {
                     self.message1 = String::new();
                     self.message2 = "Success!".to_string();
                     self.formula = rez;
-                    self.variables = 0;
+                    self.variables = s;
                 }
             }
         }
@@ -337,8 +338,8 @@ impl FormChild {
         };
         let pdd = 5;
         let formula_editor = TextEditor::new(&self.content).on_action(formula_edit);
-        let er1 = text(self.message1.clone());
-        let er2 = text(self.message2.clone());
+        let er1 = text(self.message1.clone()).font(Font::MONOSPACE);
+        let er2 = text(self.message2.clone()).font(Font::MONOSPACE);
         let wid = column!(formula_editor, er1, er2).spacing(pdd).padding(pdd);
         wid.into()
     }

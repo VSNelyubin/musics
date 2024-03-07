@@ -69,8 +69,10 @@ Spec:Spec ={
 }
 
 Bin: Expr={
-   "(" <l:Expr> <o:Opr> <r:Expr>")" => Expr::Binary{l:Box::new(l),o,r:Box::new(r)},
-   "(" <l:Expr> <r:Expr>")" => Expr::Binary{l:Box::new(l),o:Opr::Add,r:Box::new(r)},
+    #[precedence(level="1")]
+    "(" <l:Expr> <o:Opr> <r:Expr>")" => Expr::Binary{l:Box::new(l),o,r:Box::new(r)},
+    #[precedence(level="0")]
+    "-"<r:Expr> => Expr::Binary{l:Box::new(Expr::Float(-1.)),o:Opr::Mul,r:Box::new(r)},
 }
 
 Expr: Expr ={
