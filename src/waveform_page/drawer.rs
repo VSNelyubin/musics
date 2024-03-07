@@ -148,31 +148,20 @@ impl<'w> WaveformDrawer<'w> {
         WaveformDrawer { parent }
     }
 
-    /// from graph space to canvas space
-    pub fn position_to_canvas(&self, point: NRVec, bounds: Rectangle) -> NRVec {
-        self.parent.transform.position_to_canvas(point, bounds)
-    }
-
     /// from canvas space to graph space
     pub fn canvas_to_position(&self, point: NRVec, bounds: Rectangle) -> NRVec {
         self.parent.transform.canvas_to_position(point, bounds)
     }
 
-    #[allow(unused)]
-    fn get_point(&self, pos: usize, bounds: Rectangle) -> NRVec {
-        let x_1: i16 = pos.try_into().expect("ints convert");
-        let x: f32 = x_1.into(); //try_into().expect("floats convert");
-        let y_1: i16 = self.parent.data[pos]; //.try_into().expect("ints convert");
-        let y: f32 = y_1.into(); //try_into().expect("floats convert");
-        let x = x.round();
-        let y = y.round();
-        self.position_to_canvas(nr_vec(x, y), bounds)
-        // Point::new(x, y)
-    }
-
     fn get_point_y(&self, pos: usize) -> f32 {
         let y_1: i16 = self.parent.data[pos]; //.try_into().expect("ints convert");
         let y: f32 = y_1.into(); //try_into().expect("floats convert");
+        y * self.parent.transform.scale.y
+    }
+
+    fn get_point_by(&self, pos: usize) -> f32 {
+        let y_1: i16 = self.parent.affected_data[pos - self.parent.selection.0];
+        let y: f32 = y_1.into();
         y * self.parent.transform.scale.y
     }
 
@@ -213,9 +202,13 @@ impl<'w> WaveformDrawer<'w> {
     }
 
     #[allow(unused)]
-    fn get_point_2(&self, pos: usize, bounds: Rectangle) -> Option<NRVec> {
+    fn get_point_2(&self, pos: usize, bounds: Rectangle, use_buf: bool) -> Option<NRVec> {
         let scaled_x = self.get_point_x(pos, bounds)?;
-        let scaled_y = self.get_point_y(pos);
+        let scaled_y = if use_buf {
+            self.get_point_by(pos)
+        } else {
+            self.get_point_y(pos)
+        };
 
         let point = nr_vec(scaled_x, scaled_y);
         let ofpoint = point - nr_vec(0.0, point.y) + bounds.center();
@@ -237,7 +230,35 @@ impl<'w> WaveformDrawer<'w> {
 
     fn path(&self, bounds: Rectangle) -> Path {
         let mut res = Builder::new();
-        for pnt in (0..self.parent.data.len()).filter_map(|pos| self.get_point_2(pos, bounds)) {
+        for pnt in
+            (0..self.parent.data.len()).filter_map(|pos| self.get_point_2(pos, bounds, false))
+        {
+            res.line_to(pnt.into());
+        }
+        res.build()
+    }
+
+    fn unselected_paths(&self, bounds: Rectangle) -> (Path, Path) {
+        let mut left = Builder::new();
+        for pnt in
+            (0..=self.parent.selection.0).filter_map(|pos| self.get_point_2(pos, bounds, false))
+        {
+            left.line_to(pnt.into());
+        }
+        let mut right = Builder::new();
+        for pnt in (self.parent.selection.1..self.parent.data.len())
+            .filter_map(|pos| self.get_point_2(pos, bounds, false))
+        {
+            right.line_to(pnt.into());
+        }
+        (left.build(), right.build())
+    }
+
+    fn edit_path(&self, bounds: Rectangle) -> Path {
+        let mut res = Builder::new();
+        for pnt in (self.parent.selection.0..=self.parent.selection.1)
+            .filter_map(|pos| self.get_point_2(pos, bounds, true))
+        {
             res.line_to(pnt.into());
         }
         res.build()
@@ -248,8 +269,8 @@ impl<'w> WaveformDrawer<'w> {
 pub enum WaveDrawerSig {
     Scroll { delta: ScrollDelta },
     ResizeBegin { begin: NRVec },
-    ResizeEnd { end: NRVec },
-    Resize { scale: NRVec },
+    ResizeOrEraseEnd { end: NRVec },
+    ResizeOrErase { scale: NRVec },
     SelectOrEditBegin { begin: NRVec },
     SelectOrEditEnd { end: NRVec },
     SelectOrEdit { mid: NRVec },
@@ -300,7 +321,7 @@ impl Program<MesDummies> for WaveformDrawer<'_> {
                     WDStates::Resizing { one } => (
                         Status::Captured,
                         Some(MesDummies::WaveDrawerSig {
-                            wd_sig: WaveDrawerSig::ResizeEnd { end: *one },
+                            wd_sig: WaveDrawerSig::ResizeOrEraseEnd { end: *one },
                         }),
                     ),
                     WDStates::Selecting => (
@@ -317,6 +338,9 @@ impl Program<MesDummies> for WaveformDrawer<'_> {
                 return message;
             }
         };
+        let mut supos: NRVec = cursor_position.into();
+        supos.x -= _bounds.width / 2.0;
+        supos.y -= _bounds.height / 2.0;
         match _event {
             CanEvent::Mouse(mouse_event) => {
                 let message = match mouse_event {
@@ -328,7 +352,7 @@ impl Program<MesDummies> for WaveformDrawer<'_> {
 
                             *_state = WDStates::Resizing { one: cursor };
                             Some(MesDummies::WaveDrawerSig {
-                                wd_sig: WaveDrawerSig::Resize {
+                                wd_sig: WaveDrawerSig::ResizeOrErase {
                                     scale: NRVec {
                                         x: scale_x,
                                         y: scale_y,
@@ -336,14 +360,9 @@ impl Program<MesDummies> for WaveformDrawer<'_> {
                                 },
                             })
                         }
-                        WDStates::Selecting => {
-                            let mut mid: NRVec = cursor_position.into();
-                            mid.x -= _bounds.width / 2.0;
-                            mid.y -= _bounds.height / 2.0;
-                            Some(MesDummies::WaveDrawerSig {
-                                wd_sig: WaveDrawerSig::SelectOrEdit { mid },
-                            })
-                        }
+                        WDStates::Selecting => Some(MesDummies::WaveDrawerSig {
+                            wd_sig: WaveDrawerSig::SelectOrEdit { mid: supos },
+                        }),
                         WDStates::Idle => Some(MesDummies::WaveDrawerSig {
                             wd_sig: WaveDrawerSig::ForceRedraw,
                         }),
@@ -352,22 +371,15 @@ impl Program<MesDummies> for WaveformDrawer<'_> {
                     mouse::Event::ButtonPressed(mouse_button) => match _state {
                         WDStates::Idle => match mouse_button {
                             mouse::Button::Right => {
-                                let cursor = NRVec::from(cursor_position) - _bounds.center()
-                                    + _bounds.position();
-                                let begin = cursor;
-                                // self.canvas_to_position(cursor, _bounds);
-                                *_state = WDStates::Resizing { one: begin };
+                                *_state = WDStates::Resizing { one: supos };
                                 Some(MesDummies::WaveDrawerSig {
-                                    wd_sig: WaveDrawerSig::ResizeBegin { begin },
+                                    wd_sig: WaveDrawerSig::ResizeBegin { begin: supos },
                                 })
                             }
                             mouse::Button::Left => {
                                 *_state = WDStates::Selecting;
-                                let mut begin: NRVec = cursor_position.into();
-                                begin.x -= _bounds.width / 2.0;
-                                begin.y -= _bounds.height / 2.0;
                                 Some(MesDummies::WaveDrawerSig {
-                                    wd_sig: WaveDrawerSig::SelectOrEditBegin { begin },
+                                    wd_sig: WaveDrawerSig::SelectOrEditBegin { begin: supos },
                                 })
                             }
                             _ => None,
@@ -377,10 +389,9 @@ impl Program<MesDummies> for WaveformDrawer<'_> {
                     mouse::Event::ButtonReleased(mouse_button) => match _state {
                         WDStates::Resizing { .. } => {
                             if let mouse::Button::Right = mouse_button {
-                                let end = self.canvas_to_position(cursor_position.into(), _bounds);
                                 *_state = WDStates::Idle;
                                 Some(MesDummies::WaveDrawerSig {
-                                    wd_sig: WaveDrawerSig::ResizeEnd { end },
+                                    wd_sig: WaveDrawerSig::ResizeOrEraseEnd { end: supos },
                                 })
                             } else {
                                 None
@@ -389,11 +400,8 @@ impl Program<MesDummies> for WaveformDrawer<'_> {
                         WDStates::Selecting => {
                             if let mouse::Button::Left = mouse_button {
                                 *_state = WDStates::Idle;
-                                let mut end: NRVec = cursor_position.into();
-                                end.x -= _bounds.width / 2.0;
-                                end.y -= _bounds.height / 2.0;
                                 Some(MesDummies::WaveDrawerSig {
-                                    wd_sig: WaveDrawerSig::SelectOrEditEnd { end },
+                                    wd_sig: WaveDrawerSig::SelectOrEditEnd { end: supos },
                                 })
                             } else {
                                 None
@@ -478,22 +486,17 @@ impl Program<MesDummies> for WaveformDrawer<'_> {
                     .with_width(2.0),
             );
 
-            if let WDStates::Resizing { one } = _state {
-                let pos = *one; //self.position_to_canvas(*one, bounds);
+            if self.parent.edit_mode {
+                let paths = self.unselected_paths(bounds);
+                frame.stroke(&paths.0, stroke.clone());
+                frame.stroke(&paths.1, stroke.clone());
                 frame.stroke(
-                    &Path::line(nr_vec(0.0, 0.0).into(), pos.into()),
-                    grid_style.clone().with_width(2.0),
-                );
+                    &self.edit_path(bounds),
+                    stroke.with_color(Color::from_rgb8(100, 255, 200)),
+                )
+            } else {
+                frame.stroke(&self.path(bounds), stroke);
             }
-
-            // if !true {
-            //     let pos = frame.center();
-            //     frame.stroke(
-            //         &Path::line(Point::new(w, h), pos),
-            //         grid_style.clone().with_width(2.0),
-            //     );
-            // }
-            frame.stroke(&self.path(bounds), stroke);
 
             let bounds = self.selection_lines(bounds);
             if let Some(left) = &bounds.0 {

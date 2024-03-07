@@ -48,36 +48,36 @@ fn parse(s: &str) -> Vec<Statement> {
     rez.unwrap_or_default()
 }
 
-#[test]
-fn shmain() {
-    let s = "one = Min(1 , Avg( 2 , 3) , Sin(4) , &Mouse);";
-    let ss = "potato = (10+one);";
-    let sss = "potato = (one+two);";
-    let fin = format!("{s}{ss}{sss} w[0]=((potato*w[-1])*potato)");
-    let x = parse(&fin);
-    if !chek_all(&x) {
-        println!("use of undeclared variables");
-        return;
-    }
-    println!("{:#?}", x);
+// #[test]
+// fn shmain() {
+//     let s = "one = Min(1 , Avg( 2 , 3) , Sin(4) , &Mouse);";
+//     let ss = "potato = (10+one);";
+//     let sss = "potato = (one+two);";
+//     let fin = format!("{s}{ss}{sss} w[0]=((potato*w[-1])*potato)");
+//     let x = parse(&fin);
+//     if !chek_all(&x) {
+//         println!("use of undeclared variables");
+//         return;
+//     }
+//     println!("{:#?}", x);
 
-    let mut data = vec![0i16; 100];
+//     let mut data = vec![0i16; 100];
 
-    let pos = 50usize;
-    let mouse_val = 10.;
+//     let pos = 50usize;
+//     let mouse_val = 10.;
 
-    let mut var_registry: HashMap<String, f32> = HashMap::new();
+//     let mut var_registry: HashMap<String, f32> = HashMap::new();
 
-    for stat in x {
-        let val = stat.expr.eval(&data, &var_registry, (pos, mouse_val));
-        match stat.target {
-            Targets::ArrAcc(off) => data[summ(pos, off)] = val as i16,
-            Targets::Var(name) => {
-                var_registry.insert(name, val);
-            }
-        }
-    }
-}
+//     for stat in x {
+//         let val = stat.expr.eval(&data, &var_registry, (pos, mouse_val));
+//         match stat.target {
+//             Targets::ArrAcc(off) => data[summ(pos, off)] = val as i16,
+//             Targets::Var(name) => {
+//                 var_registry.insert(name, val);
+//             }
+//         }
+//     }
+// }
 
 fn summ(a: usize, b: i64) -> usize {
     if b < 0 {
@@ -137,14 +137,14 @@ impl Expr {
     }
     fn eval(
         &self,
-        data: &[i16],
+        data: (&[i16], usize),
         vars: &[f32],
         mouse: (usize, f32),
         selection: (usize, usize),
     ) -> f32 {
         match self {
             Expr::ArrAcc(off) => {
-                let x: i16 = *data.get(summ(mouse.0, *off)).unwrap_or(&0i16);
+                let x: i16 = *data.0.get(summ(mouse.0 + data.1, *off)).unwrap_or(&0i16);
                 x.into()
             }
             Expr::Var(name) => panic!("unresolved variable"), //*vars.get(name).unwrap_or(&0.),
@@ -156,7 +156,7 @@ impl Expr {
                 Spec::Mouse => mouse.1,
                 Spec::Time => (mouse.0 - selection.0) as f32,
                 Spec::Fac => {
-                    ((mouse.0 - selection.0) as f64 / (mouse.0 - selection.1) as f64) as f32
+                    ((mouse.0 - selection.0) as f64 / (selection.1 - selection.0) as f64) as f32
                 }
             },
             Expr::Float(f) => *f,
@@ -252,7 +252,7 @@ fn scans() {
 }
 
 impl FormChild {
-    pub fn act(&mut self, act: text_editor::Action) {
+    pub fn act(&mut self, act: text_editor::Action) -> bool {
         let should_parse = matches!(&act, text_editor::Action::Edit(_));
         self.content.perform(act);
         if should_parse {
@@ -260,7 +260,7 @@ impl FormChild {
             let rez = formula_parser::FormulaParser::new().parse(text);
             if let Err(e) = rez {
                 self.generate_err_message(e);
-                return;
+                return true;
             }
             let mut rez = rez.unwrap();
 
@@ -278,6 +278,7 @@ impl FormChild {
                 }
             }
         }
+        should_parse
     }
 
     fn generate_err_message(&mut self, e: ParseError<usize, Token<'_>, &str>) {
@@ -304,7 +305,8 @@ impl FormChild {
 
     pub fn affect_data(
         &mut self,
-        data: &mut [i16],
+        source: (&[i16], usize),
+        target: &mut [i16],
         mouse: (usize, f32),
         selection: (usize, usize),
     ) {
@@ -314,11 +316,14 @@ impl FormChild {
         for stat in &self.formula {
             let val = stat
                 .expr
-                .eval(data, &variables, (pos, mouse_val), selection);
+                .eval(source, &variables, (pos, mouse_val), selection);
             match &stat.target {
                 Targets::ArrAcc(off) => {
                     // println!("{:3} -> {:3}",data[summ(pos, *off)],val);
-                    data[summ(pos, *off)] = val as i16
+                    let position = summ(pos, *off);
+                    if position < target.len() {
+                        target[position] = val as i16
+                    }
                 }
                 Targets::Var(name) => panic!("target wasnt resolved"),
                 Targets::ResVar(i) => variables[*i] = val,

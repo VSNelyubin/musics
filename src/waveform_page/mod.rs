@@ -40,6 +40,8 @@ fn wrap(mut val: Audi) -> Audi {
 pub struct WaveformPage {
     data: Vec<Audi>,
     selection: (usize, usize),
+    edit_buffer: Vec<Option<Audi>>,
+    affected_data: Vec<Audi>,
     transform: Transform,
     cache: Cache,
     sample_rate: u32,
@@ -69,6 +71,8 @@ impl WaveformPage {
             sample_rate: 44800,
             channels: 1,
             selection: (0, 0),
+            edit_buffer: Vec::new(),
+            affected_data: Vec::new(),
             edit_mode: false,
             edit_last_pos: None,
             parser: FormChild::default(),
@@ -96,7 +100,9 @@ impl WaveformPage {
             cache: Cache::new(),
             sample_rate: 44800,
             channels: 1,
-            selection: (0, 0),
+            selection: (0, len / 2),
+            edit_buffer: Vec::new(),
+            affected_data: Vec::new(),
             edit_mode: false,
             edit_last_pos: None,
             parser: FormChild::default(),
@@ -111,6 +117,8 @@ impl WaveformPage {
             sample_rate,
             channels,
             selection: (0, 0),
+            edit_buffer: Vec::new(),
+            affected_data: Vec::new(),
             edit_mode: false,
             edit_last_pos: None,
             parser: FormChild::default(),
@@ -152,32 +160,70 @@ impl WaveformPage {
         let pos = self.transform.get_pos(mid.x);
         let pos = pos.min(self.selection.1).max(self.selection.0);
         self.write_data(pos, self.transform.get_amp(mid.y));
+        // self.edit_buffer[pos - self.selection.0] = Some(self.transform.get_amp(mid.y));
+        if let Some(pos_old) = self.edit_last_pos {
+            self.smooth_data(pos_old.min(pos), pos_old.max(pos));
+        }
+        self.edit_last_pos = Some(pos);
+        self.calc_data()
+    }
+
+    fn erase(&mut self, mid: NRVec) {
+        let pos = self.transform.get_pos(mid.x);
+        let pos = pos.min(self.selection.1).max(self.selection.0);
+        self.unwrite_data(pos);
         if let Some(pos_old) = self.edit_last_pos {
             let (begin, end) = if pos_old < pos {
                 (pos_old, pos)
             } else {
                 (pos, pos_old)
             };
-            // println!("{start} - {end}");
-            for (fac, i_pos) in (begin..end).enumerate().skip(1) {
-                let factor = fac as f32 / (end - begin) as f32;
-                let factor = if factor.is_nan() { 1.0 } else { factor };
-                // print!("{:1.2} ",factor);
-                // print!("{:2} ", fac);
-                let val = self.data[end] as f32 * factor + self.data[begin] as f32 * (1.0 - factor);
-                // let val = self.transform.get_amp(mid.y);
-                self.write_data(i_pos, val as i16);
+            for i_pos in begin..end {
+                self.unwrite_data(i_pos);
             }
-            // println!();
         }
         self.edit_last_pos = Some(pos);
+        self.calc_data()
     }
 
-    fn write_data(&mut self, pos: usize, sample: i16) {
-        if self.selection.0 <= pos && pos <= self.selection.1 {
-            // self.data[pos] = sample;
-            self.parser
-                .affect_data(&mut self.data, (pos, sample.into()), self.selection)
+    fn write_data(&mut self, pos: usize, sample: Audi) {
+        self.edit_buffer[pos - self.selection.0] = Some(sample);
+    }
+
+    fn smooth_data(&mut self, begin: usize, end: usize) {
+        let (begin, end) = (begin - self.selection.0, end - self.selection.0);
+        for (fac, i_pos) in (begin..end).enumerate().skip(1) {
+            let factor = fac as f32 / (end - begin) as f32;
+            let factor = if factor.is_nan() { 1.0 } else { factor };
+            let val = self.edit_buffer[end].unwrap_or_default() as f32 * factor
+                + self.edit_buffer[begin].unwrap_or_default() as f32 * (1.0 - factor);
+            self.edit_buffer[i_pos] = Some(val as i16);
+        }
+    }
+
+    fn unwrite_data(&mut self, pos: usize) {
+        self.edit_buffer[pos - self.selection.0] = None;
+    }
+
+    fn calc_data(&mut self) {
+        // self.affected_data = self
+        //     .edit_buffer
+        //     .iter()
+        //     .map(|x| x.unwrap_or_default())
+        //     .collect();
+        self.affected_data = (self.selection.0..=self.selection.1)
+            .map(|i| self.data[i])
+            .collect();
+        // println!("{:2} - {:2} = {:2}; {:2}",self.selection.1,self.selection.0,self.selection.1-self.selection.0,self.affected_data.len());
+        for i in self.edit_buffer.iter().enumerate() {
+            if let Some(sam) = i.1 {
+                self.parser.affect_data(
+                    (&self.data, self.selection.0),
+                    &mut self.affected_data,
+                    (i.0, *sam as f32),
+                    self.selection,
+                );
+            }
         }
     }
 
@@ -187,6 +233,14 @@ impl WaveformPage {
 
     fn drawer(&self) -> WaveformDrawer {
         WaveformDrawer::new(self)
+    }
+
+    fn switch_mode(&mut self) {
+        self.edit_mode = !self.edit_mode;
+        if self.edit_mode {
+            self.edit_buffer = vec![None; 1 + self.selection.1 - self.selection.0];
+            self.calc_data();
+        }
     }
 
     fn side_menu(&self) -> Element<MesDummies> {
@@ -202,9 +256,6 @@ impl WaveformPage {
         let reset_view = MesDummies::WavePageSig {
             wp_sig: WavePageSig::ResetView,
         };
-        // let formula_edit = |string: String| MesDummies::WavePageSig {
-        //     wp_sig: WavePageSig::FormulaChanged(string),
-        // };
         let pdd = 5;
         let but_reset_view = button("Reset View").padding(pdd).on_press(reset_view);
         let but_allign = button("Allign to select")
@@ -219,10 +270,7 @@ impl WaveformPage {
             "Edit Mode"
         })
         .padding(pdd)
-        .on_press(toggle_edit);
-        // let formula_editor = text_input("[0]=m", "s[0]=m")
-        //     .width(256)
-        //     .on_input(formula_edit);
+        .on_press_maybe((self.selection.0 != self.selection.1).then_some(toggle_edit));
         let formula_editor = self.parser.element();
         let menu = column![
             but_reset_view,
@@ -237,7 +285,6 @@ impl WaveformPage {
         menu.into()
     }
 
-    // pub fn view<'a>(&'a self) -> Element<'a, MesDummies> {
     pub fn view(&self) -> Element<'_, MesDummies> {
         let elem = Canvas::new(self.drawer())
             .width(Length::Fill)
@@ -257,11 +304,23 @@ impl WaveformPage {
                 self.scroll(delta);
                 self.request_redraw();
             }
-            ResizeBegin { begin } => println!("resize begin from {:?}", begin),
-            ResizeEnd { end } => println!("resize  end   at  {:?}", end),
+            ResizeBegin { .. } => {
+                if self.edit_mode {
+                    self.edit_last_pos = None;
+                }
+            }
+            ResizeOrEraseEnd { .. } => {
+                if self.edit_mode {
+                    self.edit_last_pos = None;
+                }
+            }
 
-            Resize { scale } => {
-                self.scale(scale);
+            ResizeOrErase { scale } => {
+                if self.edit_mode {
+                    self.erase(scale);
+                } else {
+                    self.scale(scale);
+                }
                 self.request_redraw();
             }
 
@@ -302,9 +361,13 @@ impl WaveformPage {
         match signal {
             AllignSelect => self.transform.allign_select(self.selection),
             FixNegScale => self.transform.fix_negative(),
-            ToggleEditMode => self.edit_mode = !self.edit_mode,
+            ToggleEditMode => self.switch_mode(),
             ResetView => self.transform = Transform::default(),
-            FormulaChanged(act) => self.parser.act(act),
+            FormulaChanged(act) => {
+                if self.parser.act(act) {
+                    self.calc_data()
+                }
+            }
         }
         self.request_redraw();
     }
