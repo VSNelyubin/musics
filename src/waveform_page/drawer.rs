@@ -270,7 +270,7 @@ pub enum WaveDrawerSig {
     Scroll { delta: ScrollDelta },
     ResizeBegin { begin: NRVec },
     ResizeOrEraseEnd { end: NRVec },
-    ResizeOrErase { scale: NRVec },
+    ResizeOrErase { scale: NRVec, mid: NRVec },
     SelectOrEditBegin { begin: NRVec },
     SelectOrEditEnd { end: NRVec },
     SelectOrEdit { mid: NRVec },
@@ -350,13 +350,14 @@ impl Program<MesDummies> for WaveformDrawer<'_> {
                             let scale_x = cursor.x / one.x;
                             let scale_y = cursor.y / one.y;
 
-                            *_state = WDStates::Resizing { one: cursor };
+                            *_state = WDStates::Resizing { one: supos };
                             Some(MesDummies::WaveDrawerSig {
                                 wd_sig: WaveDrawerSig::ResizeOrErase {
                                     scale: NRVec {
                                         x: scale_x,
                                         y: scale_y,
                                     },
+                                    mid: supos,
                                 },
                             })
                         }

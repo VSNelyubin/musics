@@ -55,7 +55,7 @@ pub struct WaveformPage {
 pub enum WavePageSig {
     AllignSelect,
     FixNegScale,
-    ToggleEditMode,
+    ToggleEditMode { save: bool },
     ResetView,
     FormulaChanged(iced::widget::text_editor::Action),
 }
@@ -235,11 +235,24 @@ impl WaveformPage {
         WaveformDrawer::new(self)
     }
 
-    fn switch_mode(&mut self) {
+    fn switch_mode(&mut self, save: bool) {
         self.edit_mode = !self.edit_mode;
         if self.edit_mode {
             self.edit_buffer = vec![None; 1 + self.selection.1 - self.selection.0];
             self.calc_data();
+        } else {
+            if save {
+                for (i, s) in self
+                    .affected_data
+                    .iter()
+                    .enumerate()
+                    .map(|(i, s)| (i + self.selection.0, *s))
+                {
+                    self.data[i] = s;
+                }
+            }
+            self.affected_data = Vec::new();
+            self.edit_buffer = Vec::new();
         }
     }
 
@@ -250,8 +263,8 @@ impl WaveformPage {
         let fix_neg_scale = MesDummies::WavePageSig {
             wp_sig: WavePageSig::FixNegScale,
         };
-        let toggle_edit = MesDummies::WavePageSig {
-            wp_sig: WavePageSig::ToggleEditMode,
+        let toggle_edit = |save: bool| MesDummies::WavePageSig {
+            wp_sig: WavePageSig::ToggleEditMode { save },
         };
         let reset_view = MesDummies::WavePageSig {
             wp_sig: WavePageSig::ResetView,
@@ -264,19 +277,35 @@ impl WaveformPage {
         let but_fix_negative = button("Flip negative scale")
             .padding(pdd)
             .on_press(fix_neg_scale);
-        let but_edit_toggle = button(if self.edit_mode {
-            "Select mode"
+        let but_toggle_edit: Element<MesDummies> = if !self.edit_mode {
+            button("Edit Mode")
+                .padding(pdd)
+                .on_press_maybe(
+                    (self.selection.0 != self.selection.1).then_some(toggle_edit(false)),
+                )
+                .into()
         } else {
-            "Edit Mode"
-        })
-        .padding(pdd)
-        .on_press_maybe((self.selection.0 != self.selection.1).then_some(toggle_edit));
+            let edit_yes = button("Apply Edit").padding(pdd).on_press_maybe(
+                (self.edit_buffer.iter().any(|x| x.is_some())).then_some(toggle_edit(true)),
+            );
+            let edit_no = button("Discard Edit")
+                .padding(pdd)
+                .on_press(toggle_edit(false));
+            row![edit_yes, edit_no].spacing(pdd).into()
+        };
+        // let but_edit_toggle = button(if self.edit_mode {
+        //     "Apply Edit"
+        // } else {
+        //     "Edit Mode"
+        // })
+        // .padding(pdd)
+        // .on_press_maybe((self.selection.0 != self.selection.1).then_some(toggle_edit(false)));
         let formula_editor = self.parser.element();
         let menu = column![
             but_reset_view,
             but_allign,
             but_fix_negative,
-            but_edit_toggle,
+            but_toggle_edit,
             formula_editor
         ]
         .spacing(pdd)
@@ -315,9 +344,9 @@ impl WaveformPage {
                 }
             }
 
-            ResizeOrErase { scale } => {
+            ResizeOrErase { scale, mid } => {
                 if self.edit_mode {
-                    self.erase(scale);
+                    self.erase(mid);
                 } else {
                     self.scale(scale);
                 }
@@ -361,7 +390,7 @@ impl WaveformPage {
         match signal {
             AllignSelect => self.transform.allign_select(self.selection),
             FixNegScale => self.transform.fix_negative(),
-            ToggleEditMode => self.switch_mode(),
+            ToggleEditMode { save } => self.switch_mode(save),
             ResetView => self.transform = Transform::default(),
             FormulaChanged(act) => {
                 if self.parser.act(act) {
