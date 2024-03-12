@@ -159,18 +159,6 @@ impl Sandbox for Adio {
         ]
         .align_items(Alignment::Start);
 
-        // let widgett = self.pages[self.cur_page].view();
-        // let hid_wid = text("hidden");
-        // let widgett2 = button("Die").padding(40).on_press(MesDummies::Fatten);
-        // let content = if !self.hide_audio {
-        //     row![widgett2, widgett]
-        // } else {
-        //     row![hid_wid, widgett2]
-        // }
-        // .padding(20)
-        // .spacing(20)
-        // .align_items(Alignment::Center);
-
         container(content)
             .width(Length::Fill)
             .height(Length::Fill)

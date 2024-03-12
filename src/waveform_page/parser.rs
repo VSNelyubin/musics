@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 use iced::{
     advanced::graphics::text::cosmic_text::rustybuzz::ttf_parser::loca,
     widget::{
@@ -21,63 +19,6 @@ use lalrpop_util::ParseError::{InvalidToken, UnrecognizedToken};
 use super::ast::*;
 
 lalrpop_mod!(pub formula_parser); // synthesized by LALRPOP
-
-fn parse(s: &str) -> Vec<Statement> {
-    let rez = formula_parser::FormulaParser::new().parse(s);
-    if let Err(e) = &rez {
-        println!("{s}");
-        match e {
-            UnrecognizedToken {
-                token: t,
-                expected: ex,
-            } => {
-                for _ in 0..t.0 {
-                    print!(" ")
-                }
-                println!("^\n{:?}\n{:?}", t, ex);
-            }
-            InvalidToken { location: t } => {
-                for _ in 0..*t {
-                    print!(" ")
-                }
-                println!("^\n{:?}", t);
-            }
-            ee => println!("{:#?}", ee),
-        }
-    }
-    rez.unwrap_or_default()
-}
-
-// #[test]
-// fn shmain() {
-//     let s = "one = Min(1 , Avg( 2 , 3) , Sin(4) , &Mouse);";
-//     let ss = "potato = (10+one);";
-//     let sss = "potato = (one+two);";
-//     let fin = format!("{s}{ss}{sss} w[0]=((potato*w[-1])*potato)");
-//     let x = parse(&fin);
-//     if !chek_all(&x) {
-//         println!("use of undeclared variables");
-//         return;
-//     }
-//     println!("{:#?}", x);
-
-//     let mut data = vec![0i16; 100];
-
-//     let pos = 50usize;
-//     let mouse_val = 10.;
-
-//     let mut var_registry: HashMap<String, f32> = HashMap::new();
-
-//     for stat in x {
-//         let val = stat.expr.eval(&data, &var_registry, (pos, mouse_val));
-//         match stat.target {
-//             Targets::ArrAcc(off) => data[summ(pos, off)] = val as i16,
-//             Targets::Var(name) => {
-//                 var_registry.insert(name, val);
-//             }
-//         }
-//     }
-// }
 
 fn summ(a: usize, b: i64) -> usize {
     if b < 0 {
@@ -138,27 +79,25 @@ impl Expr {
     }
     fn eval(
         &self,
-        data: (&[i16], usize),
+        data: &[i16],
         vars: &[f32],
         mouse: (usize, f32),
         selection: (usize, usize),
     ) -> f32 {
         match self {
             Expr::ArrAcc(off) => {
-                let x: i16 = *data.0.get(summ(mouse.0 + data.1, *off)).unwrap_or(&0i16);
+                let x: i16 = *data.get(summ(mouse.0 + selection.0, *off)).unwrap_or(&0i16);
                 x.into()
             }
-            Expr::Var(name) => panic!("unresolved variable"), //*vars.get(name).unwrap_or(&0.),
+            Expr::Var(_) => panic!("unresolved variable"), //*vars.get(name).unwrap_or(&0.),
             Expr::ResVar(idx) => vars[*idx],
             Expr::Spec(s) => match s {
                 Spec::Pi => PI,
                 Spec::E => E,
                 Spec::Rnd => 0f32,
                 Spec::Mouse => mouse.1,
-                Spec::Time => (mouse.0 - selection.0) as f32,
-                Spec::Fac => {
-                    ((mouse.0 - selection.0) as f64 / (selection.1 - selection.0) as f64) as f32
-                }
+                Spec::Time => (mouse.0 + selection.0) as f32,
+                Spec::Fac => (mouse.0 as f64 / (selection.1 - selection.0) as f64) as f32,
             },
             Expr::Float(f) => *f,
             Expr::Binary { l, o, r } => {
@@ -229,7 +168,9 @@ impl Default for FormChild {
     fn default() -> Self {
         Self {
             content: Content::with_text("[0]=&m"),
-            formula: parse("[0]=&m"),
+            formula: formula_parser::FormulaParser::new()
+                .parse("[0]=&m")
+                .unwrap(),
             message1: "".to_string(),
             message2: "Ok".to_string(),
             variables: 0,
@@ -285,10 +226,10 @@ impl FormChild {
     fn generate_err_message(&mut self, e: ParseError<usize, Token<'_>, &str>) {
         let (pos, msg) = match e {
             InvalidToken { location } => (location, "bad token"),
-            ParseError::UnrecognizedEof { location, expected } => (location, "early EOF"),
-            UnrecognizedToken { token, expected } => (token.0, "bad syntax"),
+            ParseError::UnrecognizedEof { location, .. } => (location, "early EOF"),
+            UnrecognizedToken { token, .. } => (token.0, "bad syntax"),
             ParseError::ExtraToken { token } => (token.0, "bad token"),
-            ParseError::User { error } => unimplemented!(),
+            ParseError::User { .. } => unimplemented!(),
         };
         let rang = 10usize;
         let padd = vec!['_'; rang.saturating_sub(pos)];
@@ -306,7 +247,7 @@ impl FormChild {
 
     pub fn affect_data(
         &mut self,
-        source: (&[i16], usize),
+        source: &[i16],
         target: &mut [i16],
         mouse: (usize, f32),
         selection: (usize, usize),
@@ -326,7 +267,7 @@ impl FormChild {
                         target[position] = val as i16
                     }
                 }
-                Targets::Var(name) => panic!("target wasnt resolved"),
+                Targets::Var(_) => panic!("target wasnt resolved"),
                 Targets::ResVar(i) => variables[*i] = val,
             }
         }
