@@ -56,9 +56,9 @@ impl Pages {
             panic!()
         }
     }
-    fn play_audio(&self) {
+    fn play_audio(&self, edited: bool) {
         if let Self::Wave(wave) = self {
-            wave.play_audio()
+            wave.play_audio(edited)
         } else {
             panic!()
         }
@@ -83,7 +83,7 @@ struct Adio {
 pub enum MesDummies {
     Fatten,
     OpenFile,
-    PlayAudio,
+    PlayAudio(bool),
     WaveDrawerSig { wd_sig: WaveDrawerSig },
     WavePageSig { wp_sig: WavePageSig },
 }
@@ -92,7 +92,12 @@ impl<'a> Adio {
     fn top_menu() -> Row<'a, MesDummies> {
         let menu: Row<'_, MesDummies> = row![
             button("Import").padding(5).on_press(MesDummies::OpenFile),
-            button("Play").padding(5).on_press(MesDummies::PlayAudio),
+            button("Play")
+                .padding(5)
+                .on_press(MesDummies::PlayAudio(false)),
+            button("Play Edited")
+                .padding(5)
+                .on_press(MesDummies::PlayAudio(true)),
             // button("Flip Page").padding(5).on_press(MesDummies::Fatten)
         ]
         .spacing(5)
@@ -140,8 +145,8 @@ impl Sandbox for Adio {
                 }
                 self.pages[self.cur_page] = Pages::new_widh_data(data, sample_rate, channels);
             }
-            MesDummies::PlayAudio => {
-                self.pages[self.cur_page].play_audio();
+            MesDummies::PlayAudio(edited) => {
+                self.pages[self.cur_page].play_audio(edited);
             }
         }
     }

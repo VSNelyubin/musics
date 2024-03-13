@@ -304,8 +304,29 @@ impl WaveformPage {
         rez.into()
     }
 
-    pub fn play_audio(&self) {
+    pub fn play_audio(&self, edited: bool) {
+        if edited {
+            self.play_audio_edited()
+        } else {
+            self.play_audio_og()
+        }
+    }
+
+    fn play_audio_og(&self) {
         play_i16_audio(&self.data, self.sample_rate, self.channels);
+    }
+    fn play_audio_edited(&self) {
+        let mut data = self.data.clone();
+        for (i, s) in self
+            .affected_data
+            .iter()
+            .enumerate()
+            .map(|(i, s)| (i + self.selection.0, *s))
+        {
+            data[i] = s;
+        }
+
+        play_i16_audio(&data, self.sample_rate, self.channels);
     }
 
     pub fn process_wave_drawer_sig(&mut self, signal: WaveDrawerSig) {

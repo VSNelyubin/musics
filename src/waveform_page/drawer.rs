@@ -350,7 +350,7 @@ impl Program<MesDummies> for WaveformDrawer<'_> {
                             let scale_x = cursor.x / one.x;
                             let scale_y = cursor.y / one.y;
 
-                            *_state = WDStates::Resizing { one: supos };
+                            *_state = WDStates::Resizing { one: cursor };
                             Some(MesDummies::WaveDrawerSig {
                                 wd_sig: WaveDrawerSig::ResizeOrErase {
                                     scale: NRVec {
