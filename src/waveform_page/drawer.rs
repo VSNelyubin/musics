@@ -64,33 +64,6 @@ impl Transform {
         self.scale.y *= _scale.y;
     }
 
-    /// from graph space to canvas space
-    pub fn position_to_canvas(&self, point: NRVec, _bounds: Rectangle) -> NRVec {
-        // println!("{:?}",bounds.position());
-        let (mut x, mut y) = (
-            point.x, // + _bounds.center_x() - _bounds.x,
-            point.y, // + _bounds.center_y() - _bounds.y,
-        );
-        // x += self.pos.x;
-        // y += self.pos.y;
-        x *= self.scale.x;
-        y *= self.scale.y;
-        nr_vec(x, y)
-    }
-
-    /// from canvas space to graph space
-    pub fn canvas_to_position(&self, point: NRVec, _bounds: Rectangle) -> NRVec {
-        let (mut x, mut y) = (
-            point.x, // - _bounds.center_x() + _bounds.x,
-            point.y, // - _bounds.center_y() + _bounds.y,
-        );
-        x /= self.scale.x;
-        y /= self.scale.y;
-        // x -= self.pos.x;
-        // y -= self.pos.y;
-        nr_vec(x, y)
-    }
-
     pub fn get_pos(&self, pos: f32) -> usize {
         let scaled = pos / self.scale.x;
         let scaled = scaled + scaled.signum() / 2.0;
@@ -146,11 +119,6 @@ pub struct WaveformDrawer<'w> {
 impl<'w> WaveformDrawer<'w> {
     pub fn new(parent: &'w WaveformPage) -> Self {
         WaveformDrawer { parent }
-    }
-
-    /// from canvas space to graph space
-    pub fn canvas_to_position(&self, point: NRVec, bounds: Rectangle) -> NRVec {
-        self.parent.transform.canvas_to_position(point, bounds)
     }
 
     fn get_point_y(&self, pos: usize) -> f32 {
