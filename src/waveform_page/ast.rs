@@ -48,7 +48,7 @@ pub enum MaFunc {
 
 #[derive(Debug, Clone)]
 pub enum Expr {
-    ArrAcc(i64),
+    ArrAcc(Box<Expr>),
     Var(String),
     ResVar(usize),
     Spec(Spec),

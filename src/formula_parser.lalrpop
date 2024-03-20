@@ -76,7 +76,7 @@ Bin: Expr={
 }
 
 Expr: Expr ={
-    <aa:ArrAcc> => Expr::ArrAcc(aa),
+    "["<aa:Expr>"]" => Expr::ArrAcc(Box::new(aa)),
     <v:Var> => Expr::Var(v),
     <b:Bin> => b,
     <f:SaFunc>"("<x:Expr>")" => Expr::SaFunc{f,x:Box::new(x)},

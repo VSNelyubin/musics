@@ -86,8 +86,20 @@ impl Expr {
     ) -> f32 {
         match self {
             Expr::ArrAcc(off) => {
-                let x: i16 = *data.get(summ(mouse.0 + selection.0, *off)).unwrap_or(&0i16);
-                x.into()
+                let offset = off.eval(data, vars, mouse, selection);
+                let off_i64 = offset.floor();
+                let fac = offset - off_i64;
+                let off_i64 = off_i64 as i64;
+                let xl: i16 = *data
+                    .get(summ(mouse.0 + selection.0, off_i64))
+                    .unwrap_or(&0i16);
+                let xr: i16 = *data
+                    .get(summ(mouse.0 + selection.0, off_i64 + 1))
+                    .unwrap_or(&0i16);
+                assert!((fac >= 0.0) && (fac <= 1.0));
+                let xl: f32 = xl.into();
+                let xr: f32 = xr.into();
+                xl * (1.0 - fac) + xr * fac
             }
             Expr::Var(_) => panic!("unresolved variable"), //*vars.get(name).unwrap_or(&0.),
             Expr::ResVar(idx) => vars[*idx],
