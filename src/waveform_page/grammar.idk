@@ -54,6 +54,7 @@ OP -> "/"
 SF -> "Sin"
 SF -> "Cos"
 SF -> "Tahn"
+SF -> "Tg"
 SF -> "Abs"
 SF -> "Sign"
 
@@ -64,3 +65,11 @@ MF -> "Med"
 
 SL - Statement List
 EL - Expression List
+
+SL -> eps
+SL -> ST
+SL -> ST ";" SL / SL ";" ST
+
+EL -> eps
+EL -> EX
+EL -> EX ";" EL / EL ";" EX

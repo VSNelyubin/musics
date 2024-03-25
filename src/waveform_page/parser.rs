@@ -45,6 +45,12 @@ fn chek_all(exprs: &mut [Statement]) -> Result<usize, String> {
     Ok(map.len())
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum EvalErr {
+    DivByZero,
+    NoArgs,
+}
+
 impl Expr {
     /// replace string vars with indexes, or tell which vars are undeclared
     fn checkonvert(&self, vars: &HashMap<String, usize>) -> Result<Self, String> {
@@ -74,6 +80,10 @@ impl Expr {
                     xs: Box::new(xs?),
                 }
             }
+            Expr::ArrAcc(e) => {
+                let ee = e.checkonvert(vars)?;
+                Expr::ArrAcc(Box::new(ee))
+            }
             e => e.clone(),
         })
     }
@@ -83,10 +93,10 @@ impl Expr {
         vars: &[f32],
         mouse: (usize, f32),
         selection: (usize, usize),
-    ) -> f32 {
-        match self {
+    ) -> Result<f32, EvalErr> {
+        Ok(match self {
             Expr::ArrAcc(off) => {
-                let offset = off.eval(data, vars, mouse, selection);
+                let offset = off.eval(data, vars, mouse, selection)?;
                 let off_i64 = offset.floor();
                 let fac = offset - off_i64;
                 let off_i64 = off_i64 as i64;
@@ -113,17 +123,23 @@ impl Expr {
             },
             Expr::Float(f) => *f,
             Expr::Binary { l, o, r } => {
-                let l = l.eval(data, vars, mouse, selection);
-                let r = r.eval(data, vars, mouse, selection);
+                let l = l.eval(data, vars, mouse, selection)?;
+                let r = r.eval(data, vars, mouse, selection)?;
                 match o {
                     Opr::Add => l + r,
                     Opr::Sub => l - r,
                     Opr::Mul => l * r,
-                    Opr::Div => l / r,
+                    Opr::Div => {
+                        let tmp = l / r;
+                        if tmp.is_nan() {
+                            return Err(EvalErr::DivByZero);
+                        }
+                        tmp
+                    }
                 }
             }
             Expr::SaFunc { f, x } => {
-                let v = x.eval(data, vars, mouse, selection);
+                let v = x.eval(data, vars, mouse, selection)?;
                 match f {
                     SaFunc::Sin => v.sin(),
                     SaFunc::Cos => v.cos(),
@@ -134,6 +150,10 @@ impl Expr {
             }
             Expr::MaFunc { f, xs } => {
                 let vs = xs.iter().map(|x| x.eval(data, vars, mouse, selection));
+                if let Some(x) = vs.clone().find(|x| x.is_err()) {
+                    x?;
+                }
+                let vs = vs.map(|x| x.unwrap());
                 match f {
                     MaFunc::Min => vs.fold(None, |a, i| {
                         Some(if let Some(a) = a { i.min(a) } else { i })
@@ -161,9 +181,9 @@ impl Expr {
                         }
                     }
                 }
-                .unwrap_or(0.)
+                .ok_or_else(|| EvalErr::NoArgs)?
             }
-        }
+        })
     }
 }
 
@@ -257,6 +277,19 @@ impl FormChild {
         self.message2 = format!("{spaces}^ - {msg}");
     }
 
+    fn eval_error_message(&mut self, e: EvalErr) {
+        match e {
+            EvalErr::DivByZero => {
+                self.message1 = "Sample skipped".to_string();
+                self.message2 = "Divide by Zero occured".to_string()
+            }
+            EvalErr::NoArgs => {
+                self.message1 = String::new();
+                self.message2 = "No arguments provided".to_string()
+            }
+        }
+    }
+
     pub fn affect_data(
         &mut self,
         source: &[i16],
@@ -271,6 +304,13 @@ impl FormChild {
             let val = stat
                 .expr
                 .eval(source, &variables, (pos, mouse_val), selection);
+            let val = match val {
+                Ok(val) => val,
+                Err(e) => {
+                    self.eval_error_message(e);
+                    return;
+                }
+            };
             match &stat.target {
                 Targets::ArrAcc(off) => {
                     // println!("{:3} -> {:3}",data[summ(pos, *off)],val);
