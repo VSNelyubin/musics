@@ -234,25 +234,27 @@ impl FormChild {
             let rez = formula_parser::FormulaParser::new().parse(text);
             if let Err(e) = rez {
                 self.generate_err_message(e);
-                return true;
+                return false;
             }
             let mut rez = rez.unwrap();
 
-            match chek_all(&mut rez) {
+            return match chek_all(&mut rez) {
                 Err(s) => {
                     self.message1 = s.to_string();
                     self.message2 = "Undeclared variable".to_string();
                     self.formula = Vec::new();
+                    false
                 }
                 Ok(s) => {
                     self.message1 = String::new();
                     self.message2 = "Success!".to_string();
                     self.formula = rez;
                     self.variables = s;
+                    true
                 }
-            }
+            };
         }
-        should_parse
+        false
     }
 
     fn generate_err_message(&mut self, e: ParseError<usize, Token<'_>, &str>) {
@@ -264,7 +266,7 @@ impl FormChild {
             ParseError::User { .. } => unimplemented!(),
         };
         let rang = 10usize;
-        let padd = vec!['_'; rang.saturating_sub(pos)];
+        let padd = vec![' '; rang.saturating_sub(pos)];
         let string: String = padd
             .into_iter()
             .chain(self.content.text().chars())
@@ -273,7 +275,7 @@ impl FormChild {
             .map(|c| if c == '\n' { ' ' } else { c })
             .collect();
         self.message1 = string;
-        let spaces: String = (0..rang).map(|_| '_').collect();
+        let spaces: String = (0..rang).map(|_| ' ').collect();
         self.message2 = format!("{spaces}^ - {msg}");
     }
 

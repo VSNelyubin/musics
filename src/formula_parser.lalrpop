@@ -59,6 +59,12 @@ Comma<T>: Vec<T> = { // (0)
     }
 };
 
+Range: Vec<Expr>={
+    "[" <srt:Num> ".." <fsh:Num> "]"=> (srt..fsh).map(|x|Expr::ArrAcc(Box::new(Expr::Float(x as f32)))).collect(),
+    "[" <srt:Num> "..=" <fsh:Num> "]"=> (srt..=fsh).map(|x|Expr::ArrAcc(Box::new(Expr::Float(x as f32)))).collect(),
+    <f:SaFunc>"("<xs:Range>")"=>xs.into_iter().map(|x|Expr::SaFunc{f,x:Box::new(x)}).collect(),
+}
+
 Spec:Spec ={
     r"&[mM](ouse)?" => Spec::Mouse,
     r"&[pP]i"=>Spec::Pi,
@@ -81,6 +87,7 @@ Expr: Expr ={
     <b:Bin> => b,
     <f:SaFunc>"("<x:Expr>")" => Expr::SaFunc{f,x:Box::new(x)},
     <f:MaFunc>"("<xs:Comma<Expr>>")"=>Expr::MaFunc{f,xs:Box::new(xs)},
+    <f:MaFunc>"("<xs:Range>")"=>Expr::MaFunc{f,xs:Box::new(xs)},
     <f:Float>=>Expr::Float(f),
     <i:Num>=>Expr::Float(i as f32),
     <s:Spec>=>Expr::Spec(s),

@@ -73,3 +73,6 @@ SL -> ST ";" SL / SL ";" ST
 EL -> eps
 EL -> EX
 EL -> EX ";" EL / EL ";" EX
+
+EL -> "[" INT ".." INT "]"
+EL -> SF "(" EL ")"
