@@ -1,0 +1,50 @@
+S0 -> eps
+S0 -> ST
+S0 -> ST ";" S0 / S0 ";" ST
+
+ST -> TG "=" EX
+
+TG -> "[" INT "]"
+TG -> VN
+
+INT -> UINT
+INT -> "-" UINT
+
+UINT -> UINT {0-9} / {0-9} UINT
+UINT -> {0-9}
+
+FLOAT -> INT "." UINT
+FLOAT -> "-." UINT
+FLOAT -> "." UINT
+
+VN -> {a-z A-Z} VNT
+VNT -> {a-z A-Z 0-9} VNT / VNT {a-z A-Z 0-9}
+VNT -> eps
+
+EX -> "[" EX "]"
+EX -> VN
+EX -> "&" SV
+EX -> FLOAT
+EX -> "(" EX OP EX ")"
+EX -> SF "(" EX ")"
+EX -> MF "(" EL ")"
+
+SV -> {p P} ["i"]
+SV -> {e E} ["uler"]
+SV -> {r R} [["a"]"nd"]
+SV -> {m M} ["ouse"]
+SV -> {t T} ["ime"]
+SV -> {f F} ["ac"]
+
+OP -> "+" | "-" | "*" | "/"
+
+SF -> "Sin" | "Cos" | "Tahn" | "Tg" | "Abs" | "Sign"
+
+MF -> "Min" | "Max" | "Avg" | "Med"
+
+EL -> eps
+EL -> EX
+EL -> EX ";" EL / EL ";" EX
+
+EL -> "[" INT ".." INT "]"
+EL -> SF "(" EL ")"
