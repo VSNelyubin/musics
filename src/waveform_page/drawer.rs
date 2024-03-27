@@ -29,6 +29,14 @@ pub struct Transform {
 }
 
 impl Transform {
+    pub fn new(scale: NRVec, off: usize) -> Self {
+        Self {
+            pos: NRVec::default(),
+            scale,
+            middle_idx: off,
+        }
+    }
+
     pub fn scroll(&mut self, delta: ScrollDelta) {
         let _dy = match delta {
             ScrollDelta::Lines { y, .. } => y,

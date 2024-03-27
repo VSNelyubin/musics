@@ -111,8 +111,19 @@ impl WaveformPage {
 
     pub fn new_widh_data(data: Vec<i16>, sample_rate: u32, channels: u16) -> Self {
         WaveformPage {
+            transform: Transform::new(
+                NRVec {
+                    x: 1.0 / (sample_rate as f32),
+                    y: 1.0
+                        / (*data
+                            .iter()
+                            .take(sample_rate.try_into().unwrap())
+                            .max()
+                            .unwrap() as f32),
+                },
+                0,
+            ),
             data,
-            transform: Transform::default(),
             cache: Cache::new(),
             sample_rate,
             channels,
@@ -163,9 +174,12 @@ impl WaveformPage {
         // self.edit_buffer[pos - self.selection.0] = Some(self.transform.get_amp(mid.y));
         if let Some(pos_old) = self.edit_last_pos {
             self.smooth_data(pos_old.min(pos), pos_old.max(pos));
+
+            self.calc_data(pos_old.min(pos), pos_old.max(pos), false)
+        } else {
+            self.calc_data(pos, pos, false)
         }
         self.edit_last_pos = Some(pos);
-        self.calc_data()
     }
 
     fn erase(&mut self, mid: NRVec) {
@@ -181,9 +195,11 @@ impl WaveformPage {
             for i_pos in begin..end {
                 self.edit_buffer[i_pos - self.selection.0] = None;
             }
+            self.calc_data(begin, end, true)
+        } else {
+            self.calc_data(pos, pos, true)
         }
         self.edit_last_pos = Some(pos);
-        self.calc_data()
     }
 
     fn smooth_data(&mut self, begin: usize, end: usize) {
@@ -197,18 +213,29 @@ impl WaveformPage {
         }
     }
 
-    fn calc_data(&mut self) {
-        self.affected_data = (self.selection.0..=self.selection.1)
-            .map(|i| self.data[i])
-            .collect();
-        for i in self.edit_buffer.iter().enumerate() {
-            if let Some(sam) = i.1 {
-                self.parser.affect_data(
-                    &self.data,
-                    &mut self.affected_data,
-                    (i.0, *sam as f32),
-                    self.selection,
-                );
+    fn calc_data(&mut self, begin: usize, end: usize, reset: bool) {
+        let (begin, end) = (begin - self.selection.0, end - self.selection.0);
+        // self.affected_data = (self.selection.0..=self.selection.1)
+        //     .map(|i| self.data[i])
+        //     .collect();
+        for i in self
+            .edit_buffer
+            .iter()
+            .enumerate()
+            .skip(begin)
+            .take(end - begin)
+        {
+            if reset {
+                self.affected_data[i.0] = self.data[i.0 + self.selection.0]
+            } else {
+                if let Some(sam) = i.1 {
+                    self.parser.affect_data(
+                        &self.data,
+                        &mut self.affected_data,
+                        (i.0, *sam as f32),
+                        self.selection,
+                    );
+                }
             }
         }
     }
@@ -221,7 +248,10 @@ impl WaveformPage {
         self.edit_mode = !self.edit_mode;
         if self.edit_mode {
             self.edit_buffer = vec![None; 1 + self.selection.1 - self.selection.0];
-            self.calc_data();
+            self.affected_data = (self.selection.0..=self.selection.1)
+                .map(|i| self.data[i])
+                .collect();
+            self.calc_data(self.selection.0, self.selection.1, false);
         } else {
             if save {
                 for (i, s) in self
@@ -397,7 +427,7 @@ impl WaveformPage {
             ResetView => self.transform = Transform::default(),
             FormulaChanged(act) => {
                 if self.parser.act(act) {
-                    self.calc_data()
+                    self.calc_data(self.selection.0, self.selection.1, false)
                 }
             }
         }
