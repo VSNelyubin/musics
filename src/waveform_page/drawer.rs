@@ -414,9 +414,9 @@ impl Program<MesDummies> for WaveformDrawer<'_> {
         let bg = Color::from_rgb8(10, 35, 50);
         let color = Color::from_rgb8(255, 100, 10);
 
-        let cur_pos: NRVec = NRVec::from(_cursor.position_in(bounds).unwrap_or_default())
-            - bounds.center()
-            + bounds.position();
+        // let cur_pos: NRVec = NRVec::from(_cursor.position_in(bounds).unwrap_or_default())
+        //     - bounds.center()
+        //     + bounds.position();
 
         let stroke = Stroke::default()
             .with_color(color)
@@ -439,14 +439,14 @@ impl Program<MesDummies> for WaveformDrawer<'_> {
                 &Path::line(nr_vec(w * 0.5, 0.0).into(), nr_vec(w * 0.5, h).into()),
                 grid_style.clone().with_width(1.5),
             );
-            frame.stroke(
-                &Path::line(nr_vec(0.0, 0.0).into(), nr_vec(w, h).into()),
-                grid_style.clone().with_width(1.5),
-            );
-            frame.stroke(
-                &Path::line(nr_vec(w, 0.0).into(), nr_vec(0.0, h).into()),
-                grid_style.clone().with_width(1.5),
-            );
+            // frame.stroke(
+            //     &Path::line(nr_vec(0.0, 0.0).into(), nr_vec(w, h).into()),
+            //     grid_style.clone().with_width(1.5),
+            // );
+            // frame.stroke(
+            //     &Path::line(nr_vec(w, 0.0).into(), nr_vec(0.0, h).into()),
+            //     grid_style.clone().with_width(1.5),
+            // );
 
             let translation: NRVec = frame.center().into();
             frame.translate(translation.into());
@@ -455,13 +455,13 @@ impl Program<MesDummies> for WaveformDrawer<'_> {
             // let cur_pos = Point::new(cur_pos.x, cur_pos.y);
             // let cur_pos = self.canvas_to_position(cur_pos, bounds);
             // let cur_pos = self.position_to_canvas(cur_pos, bounds);
-            frame.stroke(
-                &Path::line(nr_vec(0.0, 0.0).into(), cur_pos.into()),
-                grid_style
-                    .clone()
-                    .with_color(Color::from_rgb8(100, 255, 200))
-                    .with_width(2.0),
-            );
+            // frame.stroke(
+            //     &Path::line(nr_vec(0.0, 0.0).into(), cur_pos.into()),
+            //     grid_style
+            //         .clone()
+            //         .with_color(Color::from_rgb8(100, 255, 200))
+            //         .with_width(2.0),
+            // );
 
             if self.parent.edit_mode {
                 let paths = self.unselected_paths(bounds);

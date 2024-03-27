@@ -223,7 +223,7 @@ impl WaveformPage {
             .iter()
             .enumerate()
             .skip(begin)
-            .take(end - begin)
+            .take(end - begin+1)
         {
             if reset {
                 self.affected_data[i.0] = self.data[i.0 + self.selection.0]
