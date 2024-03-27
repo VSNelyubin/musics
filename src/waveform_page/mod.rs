@@ -111,18 +111,18 @@ impl WaveformPage {
 
     pub fn new_widh_data(data: Vec<i16>, sample_rate: u32, channels: u16) -> Self {
         WaveformPage {
-            transform: Transform::new(
-                NRVec {
-                    x: 1.0 / (sample_rate as f32),
-                    y: 1.0
-                        / (*data
-                            .iter()
-                            .take(sample_rate.try_into().unwrap())
-                            .max()
-                            .unwrap() as f32),
-                },
-                0,
-            ),
+            transform: Transform::default(),
+            // transform: Transform::new(
+            //     NRVec {
+            //         x:  (sample_rate as f32),
+            //         y:  (*data
+            //                 .iter()
+            //                 .take(sample_rate.try_into().unwrap())
+            //                 .max()
+            //                 .unwrap() as f32),
+            //     },
+            //     0,
+            // ),
             data,
             cache: Cache::new(),
             sample_rate,
