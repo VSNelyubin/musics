@@ -17,6 +17,7 @@ use iced::widget::{Column, Row};
 
 use crate::audio_player::play_i16_audio;
 use crate::not_retarded_vector::NRVec;
+use crate::wav_writer::save_wav;
 use crate::MesDummies;
 
 use self::drawer::{Transform, WaveDrawerSig, WaveformDrawer};
@@ -140,6 +141,10 @@ impl WaveformPage {
         let mut rng = rand::thread_rng();
         self.data.extend((0..len).map(|_| wrap(rng.gen::<Audi>())))
     }
+
+    pub fn save_wav(&self) {
+        save_wav(&self.data, self.sample_rate, self.channels)
+    }
 }
 
 impl WaveformPage {
@@ -223,7 +228,7 @@ impl WaveformPage {
             .iter()
             .enumerate()
             .skip(begin)
-            .take(end - begin+1)
+            .take(end - begin + 1)
         {
             if reset {
                 self.affected_data[i.0] = self.data[i.0 + self.selection.0]

@@ -2,6 +2,7 @@
 pub mod waveform_page;
 
 mod data_loader;
+mod wav_writer;
 
 mod audio_player;
 pub mod not_retarded_vector;
@@ -41,6 +42,13 @@ impl Pages {
     }
     fn new_widh_data(data: Vec<i16>, sample_rate: u32, channels: u16) -> Self {
         Self::Wave(WaveformPage::new_widh_data(data, sample_rate, channels))
+    }
+    fn save_wav(&self) {
+        if let Self::Wave(wave) = self {
+            wave.save_wav()
+        } else {
+            panic!()
+        }
     }
     fn process_page_signal(&mut self, signal: WavePageSig) {
         if let Self::Wave(wave) = self {
@@ -83,6 +91,7 @@ struct Adio {
 pub enum MesDummies {
     Fatten,
     OpenFile,
+    WriteWav,
     PlayAudio(bool),
     WaveDrawerSig { wd_sig: WaveDrawerSig },
     WavePageSig { wp_sig: WavePageSig },
@@ -98,7 +107,7 @@ impl<'a> Adio {
             button("Play Edited")
                 .padding(5)
                 .on_press(MesDummies::PlayAudio(true)),
-            // button("Flip Page").padding(5).on_press(MesDummies::Fatten)
+            button("Save Wav").padding(5).on_press(MesDummies::WriteWav) // button("Flip Page").padding(5).on_press(MesDummies::Fatten)
         ]
         .spacing(5)
         .padding(5)
@@ -147,6 +156,9 @@ impl Sandbox for Adio {
             }
             MesDummies::PlayAudio(edited) => {
                 self.pages[self.cur_page].play_audio(edited);
+            }
+            MesDummies::WriteWav => {
+                self.pages[self.cur_page].save_wav();
             }
         }
     }

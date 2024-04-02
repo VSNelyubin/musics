@@ -94,7 +94,7 @@ impl Expr {
         mouse: (usize, f32),
         selection: (usize, usize),
     ) -> Result<f32, EvalErr> {
-        Ok(match self {
+        let rez = match self {
             Expr::ArrAcc(off) => {
                 let offset = off.eval(data, vars, mouse, selection)?;
                 let off_i64 = offset.floor();
@@ -131,7 +131,7 @@ impl Expr {
                     Opr::Mul => l * r,
                     Opr::Div => {
                         let tmp = l / r;
-                        if tmp.is_nan() {
+                        if !tmp.is_finite() {
                             return Err(EvalErr::DivByZero);
                         }
                         tmp
@@ -183,7 +183,11 @@ impl Expr {
                 }
                 .ok_or_else(|| EvalErr::NoArgs)?
             }
-        })
+        };
+        if !rez.is_finite() {
+            panic!("bad number");
+        }
+        Ok(rez)
     }
 }
 
