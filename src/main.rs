@@ -50,9 +50,9 @@ impl Pages {
             panic!()
         }
     }
-    fn process_page_signal(&mut self, signal: WavePageSig) {
+    fn process_page_signal(&mut self, signal: WavePageSig, buffer: &mut Vec<i16>) {
         if let Self::Wave(wave) = self {
-            wave.process_page_signal(signal)
+            wave.process_page_signal(signal, buffer)
         } else {
             panic!()
         }
@@ -85,6 +85,7 @@ struct Adio {
     // hide_audio: bool,
     pages: Vec<Pages>,
     cur_page: usize,
+    buffer: Vec<i16>,
 }
 
 #[derive(Debug, Clone)]
@@ -142,7 +143,7 @@ impl Sandbox for Adio {
                 // self.pages[self.cur_page].append_noise(16);
             }
             MesDummies::WavePageSig { wp_sig } => {
-                self.pages[self.cur_page].process_page_signal(wp_sig)
+                self.pages[self.cur_page].process_page_signal(wp_sig, &mut self.buffer)
             }
             MesDummies::WaveDrawerSig { wd_sig } => {
                 self.pages[self.cur_page].process_wave_drawer_sig(wd_sig)

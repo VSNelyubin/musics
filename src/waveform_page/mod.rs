@@ -58,6 +58,9 @@ pub enum WavePageSig {
     FixNegScale,
     ToggleEditMode { save: bool },
     ResetView,
+    Cut { delete: bool },
+    Copy,
+    Paste { empty: Option<usize> },
     FormulaChanged(iced::widget::text_editor::Action),
 }
 
@@ -245,6 +248,41 @@ impl WaveformPage {
         }
     }
 
+    fn cut_data(&mut self) -> Vec<i16> {
+        let mut tail = self.data.split_off(self.selection.1 + 1);
+        let mid = self.data.split_off(self.selection.0);
+        self.data.append(&mut tail);
+        self.affected_data = Vec::new();
+        self.edit_buffer = Vec::new();
+        self.selection.1 = self.selection.0;
+        mid
+    }
+
+    fn copy_data(&self) -> Vec<i16> {
+        let rez = self
+            .data
+            .iter()
+            .take(self.selection.1 + 1)
+            .skip(self.selection.0)
+            .cloned()
+            .collect(); //?????????
+        rez
+    }
+
+    fn insert_data(&mut self, data: &[i16]) {
+        let mut odata = data.to_vec();
+        let mut tail = self.data.split_off(self.selection.0);
+        self.data.append(&mut odata);
+        self.data.append(&mut tail);
+    }
+
+    fn pad_data(&mut self, n: usize) {
+        let mut odata = vec![0; n];
+        let mut tail = self.data.split_off(self.selection.0);
+        self.data.append(&mut odata);
+        self.data.append(&mut tail);
+    }
+
     fn request_redraw(&mut self) {
         self.cache.clear();
     }
@@ -274,6 +312,18 @@ impl WaveformPage {
     }
 
     fn side_menu(&self) -> Element<MesDummies> {
+        let pdd = 5;
+        let nav_menu = self.nav_menu();
+        let edit_menu = self.edit_menu();
+        let formula_editor = self.parser.element();
+        let menu = column![nav_menu, edit_menu, formula_editor]
+            .spacing(pdd)
+            .padding(pdd)
+            .width(Length::Fixed(320.0));
+        menu.into()
+    }
+
+    fn nav_menu(&self) -> Element<MesDummies> {
         let allign_select = MesDummies::WavePageSig {
             wp_sig: WavePageSig::AllignSelect,
         };
@@ -310,24 +360,63 @@ impl WaveformPage {
                 .on_press(toggle_edit(false));
             row![edit_yes, edit_no].spacing(pdd).into()
         };
-        // let but_edit_toggle = button(if self.edit_mode {
-        //     "Apply Edit"
-        // } else {
-        //     "Edit Mode"
-        // })
-        // .padding(pdd)
-        // .on_press_maybe((self.selection.0 != self.selection.1).then_some(toggle_edit(false)));
-        let formula_editor = self.parser.element();
         let menu = column![
             but_reset_view,
             but_allign,
             but_fix_negative,
             but_toggle_edit,
-            formula_editor
         ]
         .spacing(pdd)
         .padding(pdd)
-        .width(Length::Fixed(320.0));
+        // .width(Length::Fixed(320.0))
+        ;
+        menu.into()
+    }
+
+    fn edit_menu(&self) -> Element<MesDummies> {
+        let pdd = 5;
+        let selecc =
+            self.selection.1.max(self.selection.0) - self.selection.0.min(self.selection.1);
+        let but_insert = button("Insert blank")
+            .padding(pdd)
+            .on_press(MesDummies::WavePageSig {
+                wp_sig: {
+                    WavePageSig::Paste {
+                        empty: Some(if selecc == 0 { 16 } else { selecc }),
+                    }
+                },
+            });
+        let but_delete = button("Delete")
+            .padding(pdd)
+            .on_press_maybe((selecc > 0).then_some(MesDummies::WavePageSig {
+                wp_sig: WavePageSig::Cut { delete: true },
+            }));
+        let but_cut = button("Cut")
+            .padding(pdd)
+            .on_press_maybe((selecc > 0).then_some(MesDummies::WavePageSig {
+                wp_sig: WavePageSig::Cut { delete: false },
+            }));
+        let but_copy = button("Copy")
+            .padding(pdd)
+            .on_press_maybe((selecc > 0).then_some(MesDummies::WavePageSig {
+                wp_sig: WavePageSig::Copy,
+            }));
+        let but_paste = button("Paste")
+            .padding(pdd)
+            .on_press(MesDummies::WavePageSig {
+                wp_sig: WavePageSig::Paste { empty: None },
+            });
+        let menu = column![
+            but_insert,
+            but_delete,
+            but_cut,
+            but_copy,
+            but_paste
+        ]
+        .spacing(pdd)
+        .padding(pdd)
+        // .width(Length::Fixed(320.0))
+        ;
         menu.into()
     }
 
@@ -423,7 +512,8 @@ impl WaveformPage {
         }
     }
 
-    pub fn process_page_signal(&mut self, signal: WavePageSig) {
+    // returns copypaste buffer
+    pub fn process_page_signal(&mut self, signal: WavePageSig, buffer: &mut Vec<i16>) {
         use WavePageSig::*;
         match signal {
             AllignSelect => self.transform.allign_select(self.selection),
@@ -435,7 +525,21 @@ impl WaveformPage {
                     self.calc_data(self.selection.0, self.selection.1, false)
                 }
             }
-        }
+            Cut { delete } => {
+                let x = self.cut_data();
+                if !delete {
+                    *buffer = x;
+                }
+            }
+            Copy => *buffer = self.copy_data(),
+            Paste { empty } => {
+                if let Some(n) = empty {
+                    self.pad_data(n);
+                } else {
+                    self.insert_data(&buffer);
+                }
+            }
+        };
         self.request_redraw();
     }
 }
