@@ -64,6 +64,7 @@ pub enum WavePageSig {
     FormulaChanged(iced::widget::text_editor::Action),
 }
 
+// creation functions
 impl WaveformPage {
     pub fn new_noisy(len: usize) -> Self {
         let mut rng = rand::thread_rng();
@@ -150,6 +151,7 @@ impl WaveformPage {
     }
 }
 
+// model functions
 impl WaveformPage {
     fn scroll(&mut self, delta: ScrollDelta) {
         self.transform.scroll(delta);
@@ -283,10 +285,6 @@ impl WaveformPage {
         self.data.append(&mut tail);
     }
 
-    fn request_redraw(&mut self) {
-        self.cache.clear();
-    }
-
     fn switch_mode(&mut self, save: bool) {
         self.edit_mode = !self.edit_mode;
         if self.edit_mode {
@@ -310,7 +308,10 @@ impl WaveformPage {
             self.edit_buffer = Vec::new();
         }
     }
+}
 
+// view + control functions
+impl WaveformPage {
     fn side_menu(&self) -> Element<MesDummies> {
         let pdd = 5;
         let nav_menu = self.nav_menu();
@@ -512,7 +513,6 @@ impl WaveformPage {
         }
     }
 
-    // returns copypaste buffer
     pub fn process_page_signal(&mut self, signal: WavePageSig, buffer: &mut Vec<i16>) {
         use WavePageSig::*;
         match signal {
@@ -541,5 +541,9 @@ impl WaveformPage {
             }
         };
         self.request_redraw();
+    }
+
+    fn request_redraw(&mut self) {
+        self.cache.clear();
     }
 }

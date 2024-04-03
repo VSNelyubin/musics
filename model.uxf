@@ -1,0 +1,47 @@
+<diagram program="umletino" version="15.1"><zoom_level>16</zoom_level><element><id>UMLClass</id><coordinates><x>208</x><y>240</y><w>192</w><h>160</h></coordinates><panel_attributes>_object: App_
+--
+buffer: Vec&lt;i16&gt;
+currentPage: usize
+--
+view()
+update()</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLClass</id><coordinates><x>208</x><y>480</y><w>368</w><h>384</h></coordinates><panel_attributes>_object: Page_
+--
+data: Vec&lt;i16&gt;
+editBuffer: Vec&lt;Option&lt;i16&gt; &gt; 
+transform: (usize, f32, f32)
+editMode: bool
+--
+view()
+update()
+
+editTransform()
+recordEdit()
+calculateEdit()
+delete() / cut() / copy() / paste() / pad()
+select()
+switchMode()
+
+</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLClass</id><coordinates><x>768</x><y>240</y><w>224</w><h>176</h></coordinates><panel_attributes>_object: Drawer_
+--
+parent: &amp;Page
+--
+view()
+update()
+
+mouseToIdxAndAmp()
+
+</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLClass</id><coordinates><x>736</x><y>512</y><w>256</w><h>352</h></coordinates><panel_attributes>_object: Parser_
+--
+text: String
+result: Vec&lt;Ast&gt;
+errMessage: String
+variables: Vec&lt;f32&gt;
+--
+view()
+update()
+
+parse()
+genError()
+resolveVariableNames()
+applyEdit()</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>288</x><y>384</y><w>80</w><h>128</h></coordinates><panel_attributes>lt=&lt;-
+m1=1..n</panel_attributes><additional_attributes>10;60;10;10</additional_attributes></element><element><id>Relation</id><coordinates><x>560</x><y>336</y><w>240</w><h>336</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-</panel_attributes><additional_attributes>130;10;60;10;60;190;10;190</additional_attributes></element><element><id>Relation</id><coordinates><x>560</x><y>704</y><w>208</w><h>48</h></coordinates><panel_attributes>lt=-</panel_attributes><additional_attributes>110;10;10;10</additional_attributes></element></diagram>
