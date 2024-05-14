@@ -1,7 +1,9 @@
 #![allow(unused_imports)]
 pub mod ast;
 pub mod drawer;
+mod effects;
 mod parser;
+pub mod sources;
 use iced::advanced::graphics::color;
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::renderer;
@@ -21,13 +23,13 @@ use crate::wav_writer::save_wav;
 use crate::MesDummies;
 
 use self::drawer::{Transform, WaveDrawerSig, WaveformDrawer};
+use self::effects::EditEffects;
 use self::parser::FormChild;
+use self::sources::DataSource;
 
-type Audi = i16;
+const LIMIT: i16 = 256;
 
-const LIMIT: Audi = 256;
-
-fn wrap(mut val: Audi) -> Audi {
+fn wrap(mut val: i16) -> i16 {
     while val < -LIMIT {
         val += LIMIT;
     }
@@ -37,12 +39,12 @@ fn wrap(mut val: Audi) -> Audi {
     val
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct WaveformPage {
-    data: Vec<Audi>,
+    data: Vec<i16>,
     selection: (usize, usize),
-    edit_buffer: Vec<Option<Audi>>,
-    affected_data: Vec<Audi>,
+    edit_buffer: Vec<Option<i16>>,
+    affected_data: Vec<i16>,
     transform: Transform,
     cache: Cache,
     sample_rate: u32,
@@ -50,6 +52,27 @@ pub struct WaveformPage {
     edit_mode: bool,
     edit_last_pos: Option<usize>,
     parser: parser::FormChild,
+    effect: EditEffects,
+}
+
+impl WaveformPage {
+    pub fn new(sr_n_cn: Option<(u32, u16)>) -> Self {
+        let (sample_rate, channels) = sr_n_cn.unwrap_or((44100, 1));
+        Self {
+            data: vec![0; 8],
+            selection: (0, 0),
+            edit_buffer: Vec::new(),
+            affected_data: Vec::new(),
+            transform: Transform::default(),
+            cache: Cache::default(),
+            sample_rate,
+            channels,
+            edit_mode: false,
+            edit_last_pos: None,
+            parser: FormChild::default(),
+            effect: EditEffects::default(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -62,93 +85,6 @@ pub enum WavePageSig {
     Copy,
     Paste { empty: Option<usize> },
     FormulaChanged(iced::widget::text_editor::Action),
-}
-
-// creation functions
-impl WaveformPage {
-    pub fn new_noisy(len: usize) -> Self {
-        let mut rng = rand::thread_rng();
-        let data = (0..len).map(|_| wrap(rng.gen::<Audi>())).collect();
-        WaveformPage {
-            data,
-            transform: Transform::default(),
-            cache: Cache::new(),
-            sample_rate: 44800,
-            channels: 1,
-            selection: (0, 0),
-            edit_buffer: Vec::new(),
-            affected_data: Vec::new(),
-            edit_mode: false,
-            edit_last_pos: None,
-            parser: FormChild::default(),
-        }
-    }
-
-    pub fn new_wedge(len: usize, focus: i16) -> Self {
-        let data = (0..len)
-            .map(|i| {
-                // let factor: f32 = (i / len) as f32 - focus;
-                // let val: i16 = ((i % 2) as i16 * 2 - 1) * LIMIT;
-                // let fval: f32 = val.into();
-                // (fval * factor).round() as i16
-                let mut res = i.try_into().unwrap();
-                res -= focus;
-                if i % 2 == 0 {
-                    res *= -1;
-                }
-                res
-            })
-            .collect();
-        WaveformPage {
-            data,
-            transform: Transform::default(),
-            cache: Cache::new(),
-            sample_rate: 44800,
-            channels: 1,
-            selection: (0, len / 2),
-            edit_buffer: Vec::new(),
-            affected_data: Vec::new(),
-            edit_mode: false,
-            edit_last_pos: None,
-            parser: FormChild::default(),
-        }
-    }
-
-    pub fn new_widh_data(data: Vec<i16>, sample_rate: u32, channels: u16) -> Self {
-        WaveformPage {
-            transform: Transform::default(),
-            // transform: Transform::new(
-            //     NRVec {
-            //         x:  (sample_rate as f32),
-            //         y:  (*data
-            //                 .iter()
-            //                 .take(sample_rate.try_into().unwrap())
-            //                 .max()
-            //                 .unwrap() as f32),
-            //     },
-            //     0,
-            // ),
-            data,
-            cache: Cache::new(),
-            sample_rate,
-            channels,
-            selection: (0, 0),
-            edit_buffer: Vec::new(),
-            affected_data: Vec::new(),
-            edit_mode: false,
-            edit_last_pos: None,
-            parser: FormChild::default(),
-        }
-    }
-
-    pub fn append_noise(&mut self, len: usize) {
-        let mut rng = rand::thread_rng();
-        self.data.extend((0..len).map(|_| wrap(rng.gen::<Audi>())))
-    }
-
-    pub fn save_wav(&self) {
-        save_wav(&self.data, self.sample_rate, self.channels)
-    }
 }
 
 // model functions
@@ -237,52 +173,32 @@ impl WaveformPage {
         {
             if reset {
                 self.affected_data[i.0] = self.data[i.0 + self.selection.0]
-            } else {
-                if let Some(sam) = i.1 {
-                    self.parser.affect_data(
-                        &self.data,
-                        &mut self.affected_data,
-                        (i.0, *sam as f32),
-                        self.selection,
-                    );
-                }
+            } else if let Some(sam) = i.1 {
+                self.parser.affect_data(
+                    &self.data,
+                    &mut self.affected_data,
+                    (i.0, *sam as f32),
+                    self.selection,
+                );
             }
         }
     }
 
     fn cut_data(&mut self) -> Vec<i16> {
-        let mut tail = self.data.split_off(self.selection.1 + 1);
-        let mid = self.data.split_off(self.selection.0);
-        self.data.append(&mut tail);
-        self.affected_data = Vec::new();
-        self.edit_buffer = Vec::new();
-        self.selection.1 = self.selection.0;
-        mid
+        self.effect = EditEffects::Delete;
+        self.data[self.selection.0..self.selection.1].to_vec()
     }
 
     fn copy_data(&self) -> Vec<i16> {
-        let rez = self
-            .data
-            .iter()
-            .take(self.selection.1 + 1)
-            .skip(self.selection.0)
-            .cloned()
-            .collect(); //?????????
-        rez
+        self.data[self.selection.0..self.selection.1].to_vec()
     }
 
     fn insert_data(&mut self, data: &[i16]) {
-        let mut odata = data.to_vec();
-        let mut tail = self.data.split_off(self.selection.0);
-        self.data.append(&mut odata);
-        self.data.append(&mut tail);
+        self.effect = EditEffects::Paste(data.to_vec())
     }
 
     fn pad_data(&mut self, n: usize) {
-        let mut odata = vec![0; n];
-        let mut tail = self.data.split_off(self.selection.0);
-        self.data.append(&mut odata);
-        self.data.append(&mut tail);
+        self.effect = EditEffects::Paste(vec![0; n])
     }
 
     fn switch_mode(&mut self, save: bool) {
@@ -306,6 +222,7 @@ impl WaveformPage {
             }
             self.affected_data = Vec::new();
             self.edit_buffer = Vec::new();
+            self.effect = EditEffects::MouseEdit;
         }
     }
 }
@@ -429,31 +346,6 @@ impl WaveformPage {
         rez.into()
     }
 
-    pub fn play_audio(&self, edited: bool) {
-        if edited {
-            self.play_audio_edited()
-        } else {
-            self.play_audio_og()
-        }
-    }
-
-    fn play_audio_og(&self) {
-        play_i16_audio(&self.data, self.sample_rate, self.channels);
-    }
-    fn play_audio_edited(&self) {
-        let mut data = self.data.clone();
-        for (i, s) in self
-            .affected_data
-            .iter()
-            .enumerate()
-            .map(|(i, s)| (i + self.selection.0, *s))
-        {
-            data[i] = s;
-        }
-
-        play_i16_audio(&data, self.sample_rate, self.channels);
-    }
-
     pub fn process_wave_drawer_sig(&mut self, signal: WaveDrawerSig) {
         use WaveDrawerSig::*;
         match signal {
@@ -536,7 +428,7 @@ impl WaveformPage {
                 if let Some(n) = empty {
                     self.pad_data(n);
                 } else {
-                    self.insert_data(&buffer);
+                    self.insert_data(buffer);
                 }
             }
         };
@@ -545,5 +437,40 @@ impl WaveformPage {
 
     fn request_redraw(&mut self) {
         self.cache.clear();
+    }
+}
+
+impl DataSource for WaveformPage {
+    fn data(&self) -> Option<Vec<i16>> {
+        self.is_cached().then_some(
+            [
+                self.data[..self.selection.0].to_vec(),
+                self.effect.data(self),
+                self.data[self.selection.1..].to_vec(),
+            ]
+            .concat(),
+        )
+    }
+
+    fn set_cache(&mut self, data: Vec<i16>) {
+        self.data = data;
+    }
+
+    fn clear_cache(&mut self) {
+        self.data.clear();
+        self.edit_buffer.clear();
+        self.affected_data.clear();
+    }
+
+    fn is_cached(&self) -> bool {
+        !self.data.is_empty()
+    }
+
+    fn sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
+
+    fn channels(&self) -> u16 {
+        self.channels
     }
 }

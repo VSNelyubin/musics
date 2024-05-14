@@ -106,7 +106,7 @@ impl Expr {
                 let xr: i16 = *data
                     .get(summ(mouse.0 + selection.0, off_i64 + 1))
                     .unwrap_or(&0i16);
-                assert!((fac >= 0.0) && (fac <= 1.0));
+                assert!((0.0..=1.0).contains(&fac));
                 let xl: f32 = xl.into();
                 let xr: f32 = xr.into();
                 xl * (1.0 - fac) + xr * fac
@@ -181,7 +181,7 @@ impl Expr {
                         }
                     }
                 }
-                .ok_or_else(|| EvalErr::NoArgs)?
+                .ok_or(EvalErr::NoArgs)?
             }
         };
         if !rez.is_finite() {
@@ -189,6 +189,25 @@ impl Expr {
         }
         Ok(rez)
     }
+    // fn restore(&self,vars: &mut HashMap<usize,String>)->String{
+    //     match self{
+    //         Expr::ArrAcc(x) => format!("[ {} ]",x.restore(vars)),
+    //         Expr::Var(x) => x.to_string(),
+    //         Expr::ResVar(x) => todo!(),
+    //         Expr::Spec(x) => format!("&{}",match x{
+    //             Spec::Pi => "Pi",
+    //             Spec::E => "E",
+    //             Spec::Rnd => "Rnd",
+    //             Spec::Mouse => "Mouse",
+    //             Spec::Time => "Time",
+    //             Spec::Fac => "Fac",
+    //         }),
+    //         Expr::Float(x) => format!("{:.3}",x),
+    //         Expr::Binary { l, o, r } => todo!(),
+    //         Expr::SaFunc { f, x } => todo!(),
+    //         Expr::MaFunc { f, xs } => todo!(),
+    //     }
+    // }
 }
 
 #[derive(Debug)]

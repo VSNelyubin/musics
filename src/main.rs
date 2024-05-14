@@ -9,15 +9,15 @@ pub mod not_retarded_vector;
 
 use data_loader::find_file;
 use iced::widget::Row;
-// use spectrum_page::SpectrumPage;
+use itertools::Itertools;
 use waveform_page::drawer::WaveDrawerSig;
+use waveform_page::sources::{DataSource as _, DataSourceType};
 use waveform_page::WavePageSig;
 
-use crate::waveform_page::WaveformPage;
 use iced::widget::horizontal_rule;
 #[allow(unused_imports)]
 use iced::widget::{button, column, container, row, text};
-use iced::{Alignment, Element, Length, Sandbox, Settings}; //, Point};
+use iced::{Alignment, Element, Length, Sandbox, Settings};
 
 pub fn main() -> iced::Result {
     Adio::run(Settings {
@@ -26,76 +26,23 @@ pub fn main() -> iced::Result {
     })
 }
 
-pub enum Pages {
-    Wave(WaveformPage),
-    // Spec(SpectrumPage),
-    OOga,
-}
-
-#[allow(dead_code)]
-impl Pages {
-    fn new_wedge(len: usize, focus: i16) -> Self {
-        Self::Wave(WaveformPage::new_wedge(len, focus))
-    }
-    fn new_noisy(len: usize) -> Self {
-        Self::Wave(WaveformPage::new_noisy(len))
-    }
-    fn new_widh_data(data: Vec<i16>, sample_rate: u32, channels: u16) -> Self {
-        Self::Wave(WaveformPage::new_widh_data(data, sample_rate, channels))
-    }
-    fn save_wav(&self) {
-        if let Self::Wave(wave) = self {
-            wave.save_wav()
-        } else {
-            panic!()
-        }
-    }
-    fn process_page_signal(&mut self, signal: WavePageSig, buffer: &mut Vec<i16>) {
-        if let Self::Wave(wave) = self {
-            wave.process_page_signal(signal, buffer)
-        } else {
-            panic!()
-        }
-    }
-    fn process_wave_drawer_sig(&mut self, signal: WaveDrawerSig) {
-        if let Self::Wave(wave) = self {
-            wave.process_wave_drawer_sig(signal)
-        } else {
-            panic!()
-        }
-    }
-    fn play_audio(&self, edited: bool) {
-        if let Self::Wave(wave) = self {
-            wave.play_audio(edited)
-        } else {
-            panic!()
-        }
-    }
-    fn view(&self) -> Element<'_, MesDummies> {
-        match self {
-            Self::Wave(wave) => wave.view(),
-            // Self::Spec(spec) => spec.view(),
-            _ => panic!(),
-        }
-    }
-}
-
-#[derive(Default)]
 struct Adio {
-    // hide_audio: bool,
-    pages: Vec<Pages>,
+    pages: Vec<DataSourceType>,
     cur_page: usize,
     buffer: Vec<i16>,
+    sr_n_cn: Option<(u32, u16)>,
 }
 
 #[derive(Debug, Clone)]
 pub enum MesDummies {
     Fatten,
+    SwitchPage(usize),
     OpenFile,
     WriteWav,
     PlayAudio(bool),
     WaveDrawerSig { wd_sig: WaveDrawerSig },
     WavePageSig { wp_sig: WavePageSig },
+    AddPage(),
 }
 
 impl<'a> Adio {
@@ -115,16 +62,85 @@ impl<'a> Adio {
         .height(Length::Shrink);
         menu
     }
+
+    fn page_access(&self) -> Row<'a, MesDummies> {
+        let mut buttons: Vec<Element<MesDummies>> = self
+            .pages
+            .iter()
+            .enumerate()
+            .map(|(i, _x)| {
+                let bname = text(format!(" {:2}", i));
+                let b = button(bname)
+                    .padding(5)
+                    .on_press_maybe((self.cur_page != i).then_some(MesDummies::SwitchPage(i)));
+                b.into()
+            })
+            .collect_vec();
+        buttons.insert(
+            self.cur_page + 1,
+            button(" + ")
+                .padding(5)
+                .on_press(MesDummies::AddPage())
+                .into(),
+        );
+        let menu: Row<'_, MesDummies> = Row::from_vec(buttons)
+            .spacing(5)
+            .padding(5)
+            .height(Length::Shrink);
+        menu
+    }
+
+    fn get_cache_for_page(&mut self, page: usize) {
+        if page == 0 {
+            return;
+        }
+        match self.cur_page.cmp(&page) {
+            std::cmp::Ordering::Less => (),
+            std::cmp::Ordering::Equal => return,
+            std::cmp::Ordering::Greater => self.pages[self.cur_page].clear_cache(),
+        }
+        let pos = self
+            .pages
+            .iter()
+            .take(page)
+            .rev()
+            .position(|x| x.is_cached())
+            .expect("first page is a source");
+        println!("chaining from {pos}");
+        for next in pos + 1..=page {
+            let prev = next - 1;
+            let data = self.pages[prev].data().unwrap();
+            self.pages[prev].clear_cache();
+            self.pages[next].set_cache(data);
+        }
+    }
+
+    // fn get_cache_for_page2(&mut self,page:usize)-> Vec<i16>{
+    //     if !self.pages[page].is_cached(){
+    //         self.pages[page].set_cache(self.get_cache_for_page2(page-1));
+    //     }
+    //     let tmp = self.pages[page].data().unwrap();
+    //     self.pages[page].clear_cache();
+    //     tmp
+    // }
 }
 
 impl Sandbox for Adio {
     type Message = MesDummies;
 
     fn new() -> Self {
-        let mut res = Adio::default();
-        res.pages.push(Pages::new_wedge(64, 32));
-        // res.pages.push(Pages::new_noisy(128));
-        res
+        let pages = vec![
+            DataSourceType::default(),
+            DataSourceType::new_wav_page(None),
+        ];
+        let mut rez = Adio {
+            pages,
+            cur_page: 0,
+            buffer: Vec::new(),
+            sr_n_cn: None,
+        };
+        rez.get_cache_for_page(1);
+        rez
     }
 
     fn theme(&self) -> iced::Theme {
@@ -149,17 +165,38 @@ impl Sandbox for Adio {
                 self.pages[self.cur_page].process_wave_drawer_sig(wd_sig)
             }
             MesDummies::OpenFile => {
-                let (data, sample_rate, channels) = find_file();
+                let (data, sample_rate, channels, name) = find_file();
                 if data.is_empty() {
                     return;
                 }
-                self.pages[self.cur_page] = Pages::new_widh_data(data, sample_rate, channels);
+                self.sr_n_cn = Some((sample_rate, channels));
+                let thing1 = DataSourceType::new_widh_data(data, sample_rate, channels, name);
+                let thing2 = DataSourceType::new_wav_page(self.sr_n_cn);
+                self.pages = vec![thing1, thing2];
+                self.cur_page = 0;
             }
             MesDummies::PlayAudio(edited) => {
-                self.pages[self.cur_page].play_audio(edited);
+                self.pages[if !edited {
+                    self.cur_page
+                } else {
+                    self.cur_page.saturating_sub(1)
+                }]
+                .play_audio();
             }
             MesDummies::WriteWav => {
                 self.pages[self.cur_page].save_wav();
+            }
+            MesDummies::SwitchPage(i) => {
+                self.get_cache_for_page(i);
+                self.cur_page = i;
+            }
+            MesDummies::AddPage() => {
+                self.pages.insert(
+                    self.cur_page + 1,
+                    DataSourceType::new_wav_page(self.sr_n_cn),
+                );
+                self.get_cache_for_page(self.cur_page + 1);
+                self.cur_page += 1;
             }
         }
     }
@@ -168,6 +205,8 @@ impl Sandbox for Adio {
         // let menu: iced::widget::Row<'_, MesDummies> = row![button("Import").padding(5),button("Die").padding(5)].spacing(5).height(30);
         let content = column![
             Adio::top_menu(),
+            horizontal_rule(5),
+            self.page_access(),
             horizontal_rule(5),
             // button("Yay")
             // .padding(40)

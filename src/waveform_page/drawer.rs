@@ -16,7 +16,9 @@ use tracing_subscriber::field::display::Messages;
 use crate::not_retarded_vector::nr_vec;
 use crate::{not_retarded_vector, MesDummies};
 
-use super::{Audi, WaveformPage};
+use super::effects::EditEffects;
+use super::sources::DataSource;
+use super::WaveformPage;
 
 use not_retarded_vector::NRVec;
 
@@ -85,12 +87,12 @@ impl Transform {
         }
     }
 
-    pub fn get_amp(&self, high: f32) -> Audi {
+    pub fn get_amp(&self, high: f32) -> i16 {
         let scaled = high / self.scale.y;
         let scaled = (scaled + 0.5) as i64;
         scaled
             .try_into()
-            .unwrap_or(if high > 0.0 { Audi::MAX } else { Audi::MIN })
+            .unwrap_or(if high > 0.0 { i16::MAX } else { i16::MIN })
     }
 
     pub fn allign_select(&mut self, selection: (usize, usize)) {
@@ -463,13 +465,14 @@ impl Program<MesDummies> for WaveformDrawer<'_> {
             //         .with_width(2.0),
             // );
 
-            if self.parent.edit_mode {
+            if !matches!(self.parent.effect, EditEffects::Unset) {
                 let paths = self.unselected_paths(bounds);
                 frame.stroke(&paths.0, stroke.clone());
                 frame.stroke(&paths.1, stroke.clone());
                 frame.stroke(
                     &self.edit_path(bounds),
-                    stroke.with_color(Color::from_rgb8(100, 255, 200)),
+                    // stroke.with_color(Color::from_rgb8(100, 255, 200)),
+                    stroke.with_color(effect_color(&self.parent.effect)),
                 )
             } else {
                 frame.stroke(&self.path(bounds), stroke);
@@ -484,5 +487,16 @@ impl Program<MesDummies> for WaveformDrawer<'_> {
             }
         });
         vec![content]
+    }
+}
+
+fn effect_color(edit: &EditEffects) -> Color {
+    match edit {
+        EditEffects::MouseEdit => Color::from_rgb8(100, 255, 200),
+        EditEffects::Delete => Color::from_rgb8(200, 50, 70),
+        EditEffects::Transfer { .. } => unimplemented!(),
+        EditEffects::Paste(_) => Color::from_rgb8(150, 255, 120),
+        EditEffects::Loop(_) => Color::from_rgb8(100, 110, 120),
+        EditEffects::Unset => Color::from_rgb8(250, 90, 0),
     }
 }

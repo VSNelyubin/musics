@@ -12,7 +12,7 @@ fn test_env() {
     println!("\n");
 }
 
-pub fn find_file() -> (Vec<i16>, u32, u16) {
+pub fn find_file() -> (Vec<i16>, u32, u16, String) {
     let dir = fs::read("./dirsave.txt")
         .map(|v| String::from_utf8(v).unwrap_or("./".to_string()))
         .unwrap_or("./".to_string());
@@ -22,9 +22,11 @@ pub fn find_file() -> (Vec<i16>, u32, u16) {
         Some(s) => s,
         None => {
             println!("no file selected");
-            return (Vec::new(), 0, 0);
+            return (Vec::new(), 0, 0, "nothing".to_owned());
         }
     };
+    let name = file.clone();
+    let name = name.file_name().unwrap().to_str().unwrap().to_string();
 
     // file.parent()
     let dir = file
@@ -36,8 +38,8 @@ pub fn find_file() -> (Vec<i16>, u32, u16) {
     // symphonia_decode(file);
     let rez = play_ogg::temst(file);
 
-    println!("donezo");
-    rez
+    // println!("donezo");
+    (rez.0, rez.1, rez.2, name)
 }
 
 #[allow(unused)]
