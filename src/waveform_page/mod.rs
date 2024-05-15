@@ -10,7 +10,7 @@ use iced::advanced::renderer;
 use iced::advanced::widget::{self, Widget};
 use iced::mouse::{self, ScrollDelta};
 use iced::widget::canvas::Cache;
-use iced::widget::{button, column, row, text_input, vertical_rule, Canvas};
+use iced::widget::{button, column, radio, row, text_input, vertical_rule, Canvas, Radio};
 use iced::{Element, Length, Rectangle, Renderer, Size, Theme}; //, Vector, Point};
 
 use rand::Rng;
@@ -336,6 +336,16 @@ impl WaveformPage {
         // .width(Length::Fixed(320.0))
         ;
         menu.into()
+    }
+
+    fn edit_menu_2(&self)->Element<MesDummies>{
+        let x = Radio::new(
+            "A",
+            Choice::A,
+            selected_choice,
+            Message::RadioSelected,
+        );
+        x.into()
     }
 
     pub fn view(&self) -> Element<'_, MesDummies> {

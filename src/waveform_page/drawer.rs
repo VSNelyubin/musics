@@ -179,7 +179,6 @@ impl<'w> WaveformDrawer<'w> {
         bounds.contains(ofpoint.into()).then_some(scaled_x)
     }
 
-    #[allow(unused)]
     fn get_point_2(&self, pos: usize, bounds: Rectangle, use_buf: bool) -> Option<NRVec> {
         let scaled_x = self.get_point_x(pos, bounds)?;
         let scaled_y = if use_buf {
@@ -189,7 +188,7 @@ impl<'w> WaveformDrawer<'w> {
         };
 
         let point = nr_vec(scaled_x, scaled_y);
-        let ofpoint = point - nr_vec(0.0, point.y) + bounds.center();
+        // let ofpoint = point - nr_vec(0.0, point.y) + bounds.center();
         Some(point)
         // bounds.contains(ofpoint.into()).then_some(point)
     }
@@ -216,30 +215,56 @@ impl<'w> WaveformDrawer<'w> {
         res.build()
     }
 
-    fn unselected_paths(&self, bounds: Rectangle) -> (Path, Path) {
+    // fn unselected_paths(&self, bounds: Rectangle) -> (Path, Path) {
+    //     let mut left = Builder::new();
+    //     for pnt in
+    //         (0..=self.parent.selection.0).filter_map(|pos| self.get_point_2(pos, bounds, false))
+    //     {
+    //         left.line_to(pnt.into());
+    //     }
+    //     let mut right = Builder::new();
+    //     for pnt in (self.parent.selection.1..self.parent.data.len())
+    //         .filter_map(|pos| self.get_point_2(pos, bounds, false))
+    //     {
+    //         right.line_to(pnt.into());
+    //     }
+    //     (left.build(), right.build())
+    // }
+
+    // fn edit_path(&self, bounds: Rectangle) -> Path {
+    //     let mut res = Builder::new();
+    //     for pnt in (self.parent.selection.0..=self.parent.selection.1)
+    //         .filter_map(|pos| self.get_point_2(pos, bounds, true))
+    //     {
+    //         res.line_to(pnt.into());
+    //     }
+    //     res.build()
+    // }
+
+    fn pcm_to_nrvec(&self, pos: usize, y: i16, bounds: Rectangle) -> Option<NRVec> {
+        let x = self.get_point_x(pos, bounds)?;
+        let y: f32 = y.into();
+        let y = y * self.parent.transform.scale.y;
+        Some(NRVec { x, y })
+    }
+
+    fn retry_path(&self, bounds: Rectangle) -> (Path, Path, Path) {
         let mut left = Builder::new();
-        for pnt in
-            (0..=self.parent.selection.0).filter_map(|pos| self.get_point_2(pos, bounds, false))
+        let sl_min = self.parent.selection.0.min(self.parent.selection.1);
+        let sl_max = self.parent.selection.0.max(self.parent.selection.1);
+        for pnt in (0..=sl_min)
+            .filter_map(|pos| self.pcm_to_nrvec(pos, self.parent.data[pos], bounds))
         {
             left.line_to(pnt.into());
         }
+        let mut mid = Builder::new();
         let mut right = Builder::new();
-        for pnt in (self.parent.selection.1..self.parent.data.len())
-            .filter_map(|pos| self.get_point_2(pos, bounds, false))
+        for pnt in (sl_max..self.parent.data.len())
+            .filter_map(|pos| self.pcm_to_nrvec(pos, self.parent.data[pos], bounds))
         {
             right.line_to(pnt.into());
         }
-        (left.build(), right.build())
-    }
-
-    fn edit_path(&self, bounds: Rectangle) -> Path {
-        let mut res = Builder::new();
-        for pnt in (self.parent.selection.0..=self.parent.selection.1)
-            .filter_map(|pos| self.get_point_2(pos, bounds, true))
-        {
-            res.line_to(pnt.into());
-        }
-        res.build()
+        (left.build(), mid.build(), right.build())
     }
 }
 
@@ -466,11 +491,11 @@ impl Program<MesDummies> for WaveformDrawer<'_> {
             // );
 
             if !matches!(self.parent.effect, EditEffects::Unset) {
-                let paths = self.unselected_paths(bounds);
+                let paths = self.retry_path(bounds);
                 frame.stroke(&paths.0, stroke.clone());
-                frame.stroke(&paths.1, stroke.clone());
+                frame.stroke(&paths.2, stroke.clone());
                 frame.stroke(
-                    &self.edit_path(bounds),
+                    &paths.1,
                     // stroke.with_color(Color::from_rgb8(100, 255, 200)),
                     stroke.with_color(effect_color(&self.parent.effect)),
                 )
