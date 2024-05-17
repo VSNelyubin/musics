@@ -25,9 +25,8 @@ impl<'w> SpectrumDrawer<'w> {
 
 #[derive(Debug)]
 pub enum SPStates {
-    Resizing { one: NRVec },
-    Selecting,
-    Editing,
+    Resizing(NRVec),
+    Moving(NRVec),
     Idle,
 }
 

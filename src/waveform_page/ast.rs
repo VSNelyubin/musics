@@ -33,6 +33,9 @@ pub enum Spec {
 pub enum SaFunc {
     Sin,
     Cos,
+    Saw,
+    Sqr,
+    Tri,
     Tahn,
     Abs,
     Sign,
