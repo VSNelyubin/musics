@@ -476,13 +476,34 @@ impl WaveformPage {
     }
     fn play_audio_selected(&self) {
         if self.edit_mode {
-            play_i16_audio(&self.affected_data, self.sample_rate, self.channels);
+            if self.affected_data.len() / 2 < self.sample_rate as usize {
+                let data: Vec<i16> = self
+                    .affected_data
+                    .iter()
+                    .cycle()
+                    .take(self.sample_rate as usize * 5)
+                    .cloned()
+                    .collect();
+                play_i16_audio(&data, self.sample_rate, self.channels);
+            } else {
+                play_i16_audio(&self.affected_data, self.sample_rate, self.channels);
+            }
         } else {
-            play_i16_audio(
-                &self.data[self.selection.0..self.selection.1],
-                self.sample_rate,
-                self.channels,
-            );
+            if self.select_len() / 2 < self.sample_rate as usize {
+                let data: Vec<i16> = self.data[self.selection.0..self.selection.1]
+                    .iter()
+                    .cycle()
+                    .take(self.sample_rate as usize * 5)
+                    .cloned()
+                    .collect();
+                play_i16_audio(&data, self.sample_rate, self.channels);
+            } else {
+                play_i16_audio(
+                    &self.data[self.selection.0..self.selection.1],
+                    self.sample_rate,
+                    self.channels,
+                );
+            }
         }
     }
 

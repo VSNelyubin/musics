@@ -195,6 +195,21 @@ impl<'w> WaveformDrawer<'w> {
         )
     }
 
+    fn limit_lines(&self, bounds: Rectangle) -> Option<(Path, Path)> {
+        let x2p = |y: f32| {
+            let left = nr_vec(-bounds.width / 2.0, y);
+            let right = nr_vec(bounds.width / 2.0, y);
+            Path::line(left.into(), right.into())
+        };
+        let y_1 = i16::MAX;
+        let y_2: f32 = y_1.into();
+        let y_3 = y_2 * self.parent.transform.scale.y;
+        // bounds
+        //     .contains(nr_vec(0., y_3).into())
+        //     .then_some()
+        Some((x2p(y_3), x2p(-y_3)))
+    }
+
     fn iter_step(&self) -> usize {
         ((0.1 / self.parent.transform.scale.x.abs()).floor() as usize).max(1)
     }
@@ -482,12 +497,16 @@ impl Program<MesDummies> for WaveformDrawer<'_> {
                 frame.stroke(&self.path(bounds), stroke);
             }
 
-            let bounds = self.selection_lines(bounds);
-            if let Some(left) = &bounds.0 {
+            let selecc = self.selection_lines(bounds);
+            if let Some(left) = &selecc.0 {
                 frame.stroke(left, select_style.clone());
             }
-            if let Some(right) = &bounds.1 {
-                frame.stroke(right, select_style);
+            if let Some(right) = &selecc.1 {
+                frame.stroke(right, select_style.clone());
+            }
+            if let Some((top, bot)) = self.limit_lines(bounds) {
+                frame.stroke(&top, select_style.clone());
+                frame.stroke(&bot, select_style);
             }
         });
         vec![content]

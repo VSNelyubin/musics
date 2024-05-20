@@ -116,9 +116,12 @@ impl<'a> Adio {
                     .then_some(MesDummies::PlayAudio(true))
             ),
             button("Save Wav").padding(5).on_press(MesDummies::WriteWav),
-            button("Spectrogram").padding(5).on_press_maybe(
-                (self.pages[self.cur_page].select_len() > SPEC_LEN).then_some(MesDummies::GetSpec)
-            ),
+            button("Spectrogram")
+                .padding(5)
+                .on_press(MesDummies::GetSpec),
+            // .on_press_maybe(
+            //     (self.pages[self.cur_page].select_len() > SPEC_LEN).then_some(MesDummies::GetSpec)
+            // ),
             // button("Clear spectrogram")
             //     .padding(5)
             //     .on_press_maybe((!self.cached_spec.is_empty()).then_some(MesDummies::ClearSpec))
@@ -212,9 +215,16 @@ impl Sandbox for Adio {
 
 fn get_spec(waveform: Vec<i16>, sr: u32) -> Vec<u8> {
     // Build the model
-    if waveform.len() <= SPEC_LEN {
-        return vec![0; SPEC_LEN];
-    }
+    let waveform = if waveform.len() <= SPEC_LEN {
+        waveform
+            .iter()
+            .cycle()
+            .take(SPEC_LEN * 16)
+            .cloned()
+            .collect()
+    } else {
+        waveform
+    };
     let mut spectrograph = SpecOptionsBuilder::new(SPEC_LEN) //.min(waveform.len().next_power_of_two() >> 1))
         .load_data_from_memory(waveform, sr)
         .build()
