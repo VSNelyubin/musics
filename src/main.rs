@@ -111,20 +111,13 @@ impl<'a> Adio {
             button("Play")
                 .padding(5)
                 .on_press(MesDummies::PlayAudio(false)),
-            button("Play Selected").padding(5).on_press_maybe(
-                (self.pages[self.cur_page].select_len() > 10)
-                    .then_some(MesDummies::PlayAudio(true))
-            ),
+            button("Play Selected")
+                .padding(5)
+                .on_press(MesDummies::PlayAudio(true)),
             button("Save Wav").padding(5).on_press(MesDummies::WriteWav),
             button("Spectrogram")
                 .padding(5)
                 .on_press(MesDummies::GetSpec),
-            // .on_press_maybe(
-            //     (self.pages[self.cur_page].select_len() > SPEC_LEN).then_some(MesDummies::GetSpec)
-            // ),
-            // button("Clear spectrogram")
-            //     .padding(5)
-            //     .on_press_maybe((!self.cached_spec.is_empty()).then_some(MesDummies::ClearSpec))
         ]
         .spacing(5)
         .padding(5)
