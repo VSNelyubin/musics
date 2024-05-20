@@ -170,7 +170,7 @@ impl WaveformPage {
 // model functions
 impl WaveformPage {
     fn scroll(&mut self, delta: ScrollDelta) {
-        self.transform.scroll(delta);
+        self.transform.scroll(delta, self.data.len());
     }
 
     fn scale(&mut self, scale: NRVec) {

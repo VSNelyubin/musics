@@ -81,6 +81,8 @@ impl Pages {
     }
 }
 
+const SPEC_LEN: usize = 1 << 11;
+
 #[derive(Default)]
 struct Adio {
     // hide_audio: bool,
@@ -93,6 +95,7 @@ struct Adio {
 #[derive(Debug, Clone)]
 pub enum MesDummies {
     GetSpec,
+    ClearSpec,
     NewWindow,
     OpenFile,
     WriteWav,
@@ -108,14 +111,17 @@ impl<'a> Adio {
             button("Play")
                 .padding(5)
                 .on_press(MesDummies::PlayAudio(false)),
-            button("Play Edited").padding(5).on_press_maybe(
+            button("Play Selected").padding(5).on_press_maybe(
                 (self.pages[self.cur_page].select_len() > 10)
                     .then_some(MesDummies::PlayAudio(true))
             ),
             button("Save Wav").padding(5).on_press(MesDummies::WriteWav),
             button("Spectrogram").padding(5).on_press_maybe(
-                (self.pages[self.cur_page].select_len() > 512).then_some(MesDummies::GetSpec)
-            )
+                (self.pages[self.cur_page].select_len() > SPEC_LEN).then_some(MesDummies::GetSpec)
+            ),
+            // button("Clear spectrogram")
+            //     .padding(5)
+            //     .on_press_maybe((!self.cached_spec.is_empty()).then_some(MesDummies::ClearSpec))
         ]
         .spacing(5)
         .padding(5)
@@ -150,6 +156,7 @@ impl Sandbox for Adio {
                     self.pages[self.cur_page].sample_rate(),
                 )
             }
+            MesDummies::ClearSpec => self.cached_spec.clear(),
             MesDummies::NewWindow => {
                 let _x: (iced::window::Id, iced::Command<MesDummies>) =
                     iced::window::spawn(settings::Settings::default());
@@ -205,10 +212,10 @@ impl Sandbox for Adio {
 
 fn get_spec(waveform: Vec<i16>, sr: u32) -> Vec<u8> {
     // Build the model
-    if waveform.len() <= 512 {
-        return vec![0; 512];
+    if waveform.len() <= SPEC_LEN {
+        return vec![0; SPEC_LEN];
     }
-    let mut spectrograph = SpecOptionsBuilder::new(512) //.min(waveform.len().next_power_of_two() >> 1))
+    let mut spectrograph = SpecOptionsBuilder::new(SPEC_LEN) //.min(waveform.len().next_power_of_two() >> 1))
         .load_data_from_memory(waveform, sr)
         .build()
         .unwrap();

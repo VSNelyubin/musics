@@ -106,7 +106,7 @@ where
 
 #[test]
 #[allow(unused)]
-fn cunty_types() {
+fn annoying() {
     let a = Point::new(0.0, 0.0);
     let b: NRVec = a.into();
     let c: Vector = b.into();

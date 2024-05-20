@@ -150,7 +150,7 @@ impl Expr {
                     SaFunc::Sqr => v.sin().signum(),
                     SaFunc::Tri => {
                         let tmp = (v / PI) - (v / PI).floor();
-                        (tmp * 2.).min(2. - tmp * 2.)*2.-1.
+                        (tmp * 2.).min(2. - tmp * 2.) * 2. - 1.
                     }
                 }
             }
