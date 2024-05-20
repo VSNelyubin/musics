@@ -203,7 +203,9 @@ impl<'w> WaveformDrawer<'w> {
         let mut res = Builder::new();
         for pnt in (0..self.parent.data.len())
             .step_by(self.iter_step())
-            .filter_map(|pos| self.get_point_2(pos, bounds, false))
+            .map(|pos| self.get_point_2(pos, bounds, false))
+            .skip_while(|x| x.is_none())
+            .map_while(|x| x)
         {
             res.line_to(pnt.into());
         }
@@ -214,14 +216,18 @@ impl<'w> WaveformDrawer<'w> {
         let mut left = Builder::new();
         for pnt in (0..=self.parent.selection.0)
             .step_by(self.iter_step())
-            .filter_map(|pos| self.get_point_2(pos, bounds, false))
+            .map(|pos| self.get_point_2(pos, bounds, false))
+            .skip_while(|x| x.is_none())
+            .map_while(|x| x)
         {
             left.line_to(pnt.into());
         }
         let mut right = Builder::new();
         for pnt in (self.parent.selection.1..self.parent.data.len())
             .step_by(self.iter_step())
-            .filter_map(|pos| self.get_point_2(pos, bounds, false))
+            .map(|pos| self.get_point_2(pos, bounds, false))
+            .skip_while(|x| x.is_none())
+            .map_while(|x| x)
         {
             right.line_to(pnt.into());
         }
@@ -232,7 +238,9 @@ impl<'w> WaveformDrawer<'w> {
         let mut res = Builder::new();
         for pnt in (self.parent.selection.0..=self.parent.selection.1)
             .step_by(self.iter_step())
-            .filter_map(|pos| self.get_point_2(pos, bounds, true))
+            .map(|pos| self.get_point_2(pos, bounds, true))
+            .skip_while(|x| x.is_none())
+            .map_while(|x| x)
         {
             res.line_to(pnt.into());
         }

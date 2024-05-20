@@ -17,7 +17,10 @@ pub fn find_file() -> (Vec<i16>, u32, u16) {
         .map(|v| String::from_utf8(v).unwrap_or("./".to_string()))
         .unwrap_or("./".to_string());
 
-    let files = FileDialog::new().set_directory(dir).pick_file();
+    let files = FileDialog::new()
+        .set_directory(dir)
+        .add_filter("acceptable formats", &["wav", "mp3", "ogg"])
+        .pick_file();
     let file = match files {
         Some(s) => s,
         None => {
@@ -55,7 +58,12 @@ mod play_ogg {
         // let mut all_buf = Vec::new();
         // let x = buffer.read_to_end(&mut all_buf);
         // println!("len is {:?} bytes", x);
-        let decoder = Decoder::new(buffer).expect("decoded");
+        let decoder = if let Ok(x) = Decoder::new(buffer) {
+            x
+        } else {
+            println!("file couldt not be decoded");
+            return (Vec::new(), 0, 0);
+        };
         let (sample_rate, channels) = (decoder.sample_rate(), decoder.channels());
         let data: Vec<i16> = decoder.collect();
         // let beep1 = match _stream_handle.play_once(buffer) {
