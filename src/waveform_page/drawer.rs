@@ -95,9 +95,10 @@ impl Transform {
         let delt = selection.0.max(selection.1) - selection.0.min(selection.1);
         self.middle_idx = selection.0.min(selection.1) + delt / 2;
         let scale: i64 = delt.try_into().unwrap();
-        let scale: i16 = scale.try_into().unwrap();
-        let scale: f32 = scale.into(); //try_into().unwrap();
-        self.scale.x = 700.0 / (scale + 0.1) * self.scale.x.signum();
+        let scale: f64 = scale as f64;
+        let scale = 700.0 / (scale + 0.1);
+        let scale: f32 = scale as f32;
+        self.scale.x = scale * self.scale.x.signum();
     }
 
     pub fn fix_negative(&mut self) {
@@ -208,6 +209,24 @@ impl<'w> WaveformDrawer<'w> {
         //     .contains(nr_vec(0., y_3).into())
         //     .then_some()
         Some((x2p(y_3), x2p(-y_3)))
+    }
+
+    fn time_marks(&self, bounds: Rectangle) -> Vec<Path> {
+        let x2p = |x: f32, h: f32| {
+            let left = nr_vec(x, -h);
+            let right = nr_vec(x, h);
+            Path::line(left.into(), right.into())
+        };
+
+        let rez: Vec<_> = (0..self.parent.data.len())
+            .step_by(self.parent.sample_rate as usize * self.parent.channels as usize)
+            .map(|x| self.get_point_x(x, bounds))
+            .skip_while(|x| x.is_none())
+            .map_while(|x| x.map(|y| x2p(y, 50.)))
+            .collect();
+        // println!("{}",rez.len());
+        assert!(rez.len() as isize / 2 >= 0);
+        rez
     }
 
     fn iter_step(&self) -> usize {
@@ -461,29 +480,9 @@ impl Program<MesDummies> for WaveformDrawer<'_> {
                 &Path::line(nr_vec(w * 0.5, 0.0).into(), nr_vec(w * 0.5, h).into()),
                 grid_style.clone().with_width(1.5),
             );
-            // frame.stroke(
-            //     &Path::line(nr_vec(0.0, 0.0).into(), nr_vec(w, h).into()),
-            //     grid_style.clone().with_width(1.5),
-            // );
-            // frame.stroke(
-            //     &Path::line(nr_vec(w, 0.0).into(), nr_vec(0.0, h).into()),
-            //     grid_style.clone().with_width(1.5),
-            // );
 
             let translation: NRVec = frame.center().into();
             frame.translate(translation.into());
-
-            // let cur_pos = _cursor.position_in(bounds).unwrap_or_default()-frame.center();
-            // let cur_pos = Point::new(cur_pos.x, cur_pos.y);
-            // let cur_pos = self.canvas_to_position(cur_pos, bounds);
-            // let cur_pos = self.position_to_canvas(cur_pos, bounds);
-            // frame.stroke(
-            //     &Path::line(nr_vec(0.0, 0.0).into(), cur_pos.into()),
-            //     grid_style
-            //         .clone()
-            //         .with_color(Color::from_rgb8(100, 255, 200))
-            //         .with_width(2.0),
-            // );
 
             if self.parent.edit_mode {
                 let paths = self.unselected_paths(bounds);
@@ -495,6 +494,10 @@ impl Program<MesDummies> for WaveformDrawer<'_> {
                 )
             } else {
                 frame.stroke(&self.path(bounds), stroke);
+            }
+
+            for i in self.time_marks(bounds) {
+                frame.stroke(&i, grid_style.clone().with_width(1.1));
             }
 
             let selecc = self.selection_lines(bounds);

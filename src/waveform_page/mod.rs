@@ -8,7 +8,7 @@ use iced::advanced::renderer;
 use iced::advanced::widget::{self, Widget};
 use iced::mouse::{self, ScrollDelta};
 use iced::widget::canvas::Cache;
-use iced::widget::{button, column, row, text_input, vertical_rule, Canvas};
+use iced::widget::{button, column, row, slider, text_input, vertical_rule, Canvas};
 use iced::{Element, Length, Rectangle, Renderer, Size, Theme}; //, Vector, Point};
 
 use rand::Rng;
@@ -50,6 +50,7 @@ pub struct WaveformPage {
     edit_mode: bool,
     edit_last_pos: Option<usize>,
     parser: parser::FormChild,
+    padlen: i32,
 }
 
 #[derive(Debug, Clone)]
@@ -61,6 +62,7 @@ pub enum WavePageSig {
     Cut { delete: bool },
     Copy,
     Paste { empty: Option<usize> },
+    PadLen(i32),
     FormulaChanged(iced::widget::text_editor::Action),
 }
 
@@ -81,6 +83,7 @@ impl WaveformPage {
             edit_mode: false,
             edit_last_pos: None,
             parser: FormChild::default(),
+            padlen: 5,
         }
     }
 
@@ -111,6 +114,7 @@ impl WaveformPage {
             edit_mode: false,
             edit_last_pos: None,
             parser: FormChild::default(),
+            padlen: 5,
         }
     }
 
@@ -138,6 +142,7 @@ impl WaveformPage {
             edit_mode: false,
             edit_last_pos: None,
             parser: FormChild::default(),
+            padlen: 5,
         }
     }
 
@@ -392,12 +397,19 @@ impl WaveformPage {
         let pdd = 5;
         let selecc =
             self.selection.1.max(self.selection.0) - self.selection.0.min(self.selection.1);
-        let but_insert = button("Insert blank")
+        let slid = slider(6..=16, self.padlen, |x| MesDummies::WavePageSig {
+            wp_sig: WavePageSig::PadLen(x),
+        })
+        .width(Length::Fixed(100.));
+        let txt = "Pad";
+        let content = row![txt, slid];
+        let content: Element<MesDummies> = content.into();
+        let but_insert = button(content)
             .padding(pdd)
             .on_press(MesDummies::WavePageSig {
                 wp_sig: {
                     WavePageSig::Paste {
-                        empty: Some(if selecc == 0 { 16 } else { selecc }),
+                        empty: Some(1 << self.padlen),
                     }
                 },
             });
@@ -592,6 +604,7 @@ impl WaveformPage {
                     self.insert_data(buffer);
                 }
             }
+            PadLen(x) => self.padlen = x,
         };
         self.request_redraw();
     }
