@@ -1,3 +1,4 @@
+use audrey::hound::Sample;
 use iced::futures::future::select;
 use iced::mouse::ScrollDelta;
 use iced::widget::canvas::event::{self, Event as CanEvent};
@@ -37,7 +38,7 @@ impl Transform {
         }
     }
 
-    pub fn scroll(&mut self, delta: ScrollDelta) {
+    pub fn scroll(&mut self, delta: ScrollDelta, max: usize) {
         let _dy = match delta {
             ScrollDelta::Lines { y, .. } => y,
             ScrollDelta::Pixels { y, .. } => y,
@@ -56,13 +57,9 @@ impl Transform {
         let delt = (delt as i64).abs();
         // println!(" {delt}");
         self.middle_idx = if _dy < 0.0 {
-            self.middle_idx
-                .checked_sub(1 + delt as usize)
-                .unwrap_or(self.middle_idx)
+            self.middle_idx.saturating_sub(1 + delt as usize)
         } else {
-            self.middle_idx
-                .checked_add(1 + delt as usize)
-                .unwrap_or(self.middle_idx)
+            self.middle_idx.saturating_add(1 + delt as usize).min(max)
         };
         // println!("{}\t{}", self.pos.x, self.middle_idx);
     }
@@ -70,6 +67,7 @@ impl Transform {
     pub fn scale(&mut self, _scale: NRVec) {
         self.scale.x *= _scale.x;
         self.scale.y *= _scale.y;
+        // println!("{}",(-(self.scale.x.abs().log2()).floor() as usize).next_power_of_two());
     }
 
     pub fn get_pos(&self, pos: f32) -> usize {
@@ -97,9 +95,10 @@ impl Transform {
         let delt = selection.0.max(selection.1) - selection.0.min(selection.1);
         self.middle_idx = selection.0.min(selection.1) + delt / 2;
         let scale: i64 = delt.try_into().unwrap();
-        let scale: i16 = scale.try_into().unwrap();
-        let scale: f32 = scale.into(); //try_into().unwrap();
-        self.scale.x = 700.0 / (scale + 0.1) * self.scale.x.signum();
+        let scale: f64 = scale as f64;
+        let scale = 700.0 / (scale + 0.1);
+        let scale: f32 = scale as f32;
+        self.scale.x = scale * self.scale.x.signum();
     }
 
     pub fn fix_negative(&mut self) {
@@ -154,24 +153,17 @@ impl<'w> WaveformDrawer<'w> {
             } else {
                 return None;
             }
-        }; //offset_index
-        if i64_x >= 0x8000 {
-            return None;
-        }
-        if i64_x <= -0x8000 {
-            return None;
-        }
-        // let con_x: Option<f32> = i64_x
-        //     .try_into()
-        //     .ok()
-        //     .and_then(|i16_x: i16| i16_x.try_into().ok());
-        // if con_x.is_none() {
-        //     println!("{:x}", i64_x);
-        //     panic!("stop here");
-        // }
-        let i16_x: i16 = i64_x.try_into().ok()?;
-        let f32_x: f32 = i16_x.into(); //try_into().ok()?;
-        let scaled_x = f32_x * self.parent.transform.scale.x;
+        };
+        let scaled_x = if i64_x.abs() >= 0x8000 {
+            let scale = (1. / self.parent.transform.scale.x) as i64;
+            (scale != 0).then_some(0)?;
+            let i16_x: i16 = (i64_x / scale).try_into().ok()?;
+            i16_x.into()
+        } else {
+            let i16_x: i16 = i64_x.try_into().ok()?;
+            let f32_x: f32 = i16_x.into();
+            f32_x * self.parent.transform.scale.x
+        };
         let point = nr_vec(scaled_x, 0.0);
         let ofpoint = point - nr_vec(0.0, point.y) + bounds.center();
         bounds.contains(ofpoint.into()).then_some(scaled_x)
@@ -204,10 +196,50 @@ impl<'w> WaveformDrawer<'w> {
         )
     }
 
+    fn limit_lines(&self, bounds: Rectangle) -> Option<(Path, Path)> {
+        let x2p = |y: f32| {
+            let left = nr_vec(-bounds.width / 2.0, y);
+            let right = nr_vec(bounds.width / 2.0, y);
+            Path::line(left.into(), right.into())
+        };
+        let y_1 = i16::MAX;
+        let y_2: f32 = y_1.into();
+        let y_3 = y_2 * self.parent.transform.scale.y;
+        // bounds
+        //     .contains(nr_vec(0., y_3).into())
+        //     .then_some()
+        Some((x2p(y_3), x2p(-y_3)))
+    }
+
+    fn time_marks(&self, bounds: Rectangle) -> Vec<Path> {
+        let x2p = |x: f32, h: f32| {
+            let left = nr_vec(x, -h);
+            let right = nr_vec(x, h);
+            Path::line(left.into(), right.into())
+        };
+
+        let rez: Vec<_> = (0..self.parent.data.len())
+            .step_by(self.parent.sample_rate as usize * self.parent.channels as usize)
+            .map(|x| self.get_point_x(x, bounds))
+            .skip_while(|x| x.is_none())
+            .map_while(|x| x.map(|y| x2p(y, 50.)))
+            .collect();
+        // println!("{}",rez.len());
+        assert!(rez.len() as isize / 2 >= 0);
+        rez
+    }
+
+    fn iter_step(&self) -> usize {
+        ((0.1 / self.parent.transform.scale.x.abs()).floor() as usize).max(1)
+    }
+
     fn path(&self, bounds: Rectangle) -> Path {
         let mut res = Builder::new();
-        for pnt in
-            (0..self.parent.data.len()).filter_map(|pos| self.get_point_2(pos, bounds, false))
+        for pnt in (0..self.parent.data.len())
+            .step_by(self.iter_step())
+            .map(|pos| self.get_point_2(pos, bounds, false))
+            .skip_while(|x| x.is_none())
+            .map_while(|x| x)
         {
             res.line_to(pnt.into());
         }
@@ -216,14 +248,20 @@ impl<'w> WaveformDrawer<'w> {
 
     fn unselected_paths(&self, bounds: Rectangle) -> (Path, Path) {
         let mut left = Builder::new();
-        for pnt in
-            (0..=self.parent.selection.0).filter_map(|pos| self.get_point_2(pos, bounds, false))
+        for pnt in (0..=self.parent.selection.0)
+            .step_by(self.iter_step())
+            .map(|pos| self.get_point_2(pos, bounds, false))
+            .skip_while(|x| x.is_none())
+            .map_while(|x| x)
         {
             left.line_to(pnt.into());
         }
         let mut right = Builder::new();
         for pnt in (self.parent.selection.1..self.parent.data.len())
-            .filter_map(|pos| self.get_point_2(pos, bounds, false))
+            .step_by(self.iter_step())
+            .map(|pos| self.get_point_2(pos, bounds, false))
+            .skip_while(|x| x.is_none())
+            .map_while(|x| x)
         {
             right.line_to(pnt.into());
         }
@@ -233,7 +271,10 @@ impl<'w> WaveformDrawer<'w> {
     fn edit_path(&self, bounds: Rectangle) -> Path {
         let mut res = Builder::new();
         for pnt in (self.parent.selection.0..=self.parent.selection.1)
-            .filter_map(|pos| self.get_point_2(pos, bounds, true))
+            .step_by(self.iter_step())
+            .map(|pos| self.get_point_2(pos, bounds, true))
+            .skip_while(|x| x.is_none())
+            .map_while(|x| x)
         {
             res.line_to(pnt.into());
         }
@@ -439,29 +480,9 @@ impl Program<MesDummies> for WaveformDrawer<'_> {
                 &Path::line(nr_vec(w * 0.5, 0.0).into(), nr_vec(w * 0.5, h).into()),
                 grid_style.clone().with_width(1.5),
             );
-            // frame.stroke(
-            //     &Path::line(nr_vec(0.0, 0.0).into(), nr_vec(w, h).into()),
-            //     grid_style.clone().with_width(1.5),
-            // );
-            // frame.stroke(
-            //     &Path::line(nr_vec(w, 0.0).into(), nr_vec(0.0, h).into()),
-            //     grid_style.clone().with_width(1.5),
-            // );
 
             let translation: NRVec = frame.center().into();
             frame.translate(translation.into());
-
-            // let cur_pos = _cursor.position_in(bounds).unwrap_or_default()-frame.center();
-            // let cur_pos = Point::new(cur_pos.x, cur_pos.y);
-            // let cur_pos = self.canvas_to_position(cur_pos, bounds);
-            // let cur_pos = self.position_to_canvas(cur_pos, bounds);
-            // frame.stroke(
-            //     &Path::line(nr_vec(0.0, 0.0).into(), cur_pos.into()),
-            //     grid_style
-            //         .clone()
-            //         .with_color(Color::from_rgb8(100, 255, 200))
-            //         .with_width(2.0),
-            // );
 
             if self.parent.edit_mode {
                 let paths = self.unselected_paths(bounds);
@@ -475,12 +496,20 @@ impl Program<MesDummies> for WaveformDrawer<'_> {
                 frame.stroke(&self.path(bounds), stroke);
             }
 
-            let bounds = self.selection_lines(bounds);
-            if let Some(left) = &bounds.0 {
+            for i in self.time_marks(bounds) {
+                frame.stroke(&i, grid_style.clone().with_width(1.1));
+            }
+
+            let selecc = self.selection_lines(bounds);
+            if let Some(left) = &selecc.0 {
                 frame.stroke(left, select_style.clone());
             }
-            if let Some(right) = &bounds.1 {
-                frame.stroke(right, select_style);
+            if let Some(right) = &selecc.1 {
+                frame.stroke(right, select_style.clone());
+            }
+            if let Some((top, bot)) = self.limit_lines(bounds) {
+                frame.stroke(&top, select_style.clone());
+                frame.stroke(&bot, select_style);
             }
         });
         vec![content]

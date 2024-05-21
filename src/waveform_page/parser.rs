@@ -106,7 +106,7 @@ impl Expr {
                 let xr: i16 = *data
                     .get(summ(mouse.0 + selection.0, off_i64 + 1))
                     .unwrap_or(&0i16);
-                assert!((fac >= 0.0) && (fac <= 1.0));
+                assert!((0.0..=1.0).contains(&fac));
                 let xl: f32 = xl.into();
                 let xr: f32 = xr.into();
                 xl * (1.0 - fac) + xr * fac
@@ -146,6 +146,12 @@ impl Expr {
                     SaFunc::Tahn => v.tan(),
                     SaFunc::Abs => v.abs(),
                     SaFunc::Sign => v.signum(),
+                    SaFunc::Saw => ((v / PI) - (v / PI).floor()) * 2. - 1.,
+                    SaFunc::Sqr => v.sin().signum(),
+                    SaFunc::Tri => {
+                        let tmp = (v / PI) - (v / PI).floor();
+                        (tmp * 2.).min(2. - tmp * 2.) * 2. - 1.
+                    }
                 }
             }
             Expr::MaFunc { f, xs } => {
@@ -181,7 +187,7 @@ impl Expr {
                         }
                     }
                 }
-                .ok_or_else(|| EvalErr::NoArgs)?
+                .ok_or(EvalErr::NoArgs)?
             }
         };
         if !rez.is_finite() {

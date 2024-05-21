@@ -8,7 +8,7 @@ use iced::advanced::renderer;
 use iced::advanced::widget::{self, Widget};
 use iced::mouse::{self, ScrollDelta};
 use iced::widget::canvas::Cache;
-use iced::widget::{button, column, row, text_input, vertical_rule, Canvas};
+use iced::widget::{button, column, row, slider, text_input, vertical_rule, Canvas};
 use iced::{Element, Length, Rectangle, Renderer, Size, Theme}; //, Vector, Point};
 
 use rand::Rng;
@@ -50,6 +50,7 @@ pub struct WaveformPage {
     edit_mode: bool,
     edit_last_pos: Option<usize>,
     parser: parser::FormChild,
+    padlen: i32,
 }
 
 #[derive(Debug, Clone)]
@@ -61,10 +62,11 @@ pub enum WavePageSig {
     Cut { delete: bool },
     Copy,
     Paste { empty: Option<usize> },
+    PadLen(i32),
     FormulaChanged(iced::widget::text_editor::Action),
 }
 
-// creation functions
+// misc functions
 impl WaveformPage {
     pub fn new_noisy(len: usize) -> Self {
         let mut rng = rand::thread_rng();
@@ -81,6 +83,7 @@ impl WaveformPage {
             edit_mode: false,
             edit_last_pos: None,
             parser: FormChild::default(),
+            padlen: 5,
         }
     }
 
@@ -111,6 +114,7 @@ impl WaveformPage {
             edit_mode: false,
             edit_last_pos: None,
             parser: FormChild::default(),
+            padlen: 5,
         }
     }
 
@@ -138,6 +142,7 @@ impl WaveformPage {
             edit_mode: false,
             edit_last_pos: None,
             parser: FormChild::default(),
+            padlen: 5,
         }
     }
 
@@ -149,12 +154,28 @@ impl WaveformPage {
     pub fn save_wav(&self) {
         save_wav(&self.data, self.sample_rate, self.channels)
     }
+
+    pub fn focus_data(&self) -> Vec<i16> {
+        if self.edit_mode {
+            self.affected_data.clone()
+        } else {
+            self.data[self.selection.0..self.selection.1].to_vec()
+        }
+    }
+
+    pub fn sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
+
+    pub fn select_len(&self) -> usize {
+        self.selection.1.max(self.selection.0) - self.selection.0.min(self.selection.1)
+    }
 }
 
 // model functions
 impl WaveformPage {
     fn scroll(&mut self, delta: ScrollDelta) {
-        self.transform.scroll(delta);
+        self.transform.scroll(delta, self.data.len());
     }
 
     fn scale(&mut self, scale: NRVec) {
@@ -237,15 +258,13 @@ impl WaveformPage {
         {
             if reset {
                 self.affected_data[i.0] = self.data[i.0 + self.selection.0]
-            } else {
-                if let Some(sam) = i.1 {
-                    self.parser.affect_data(
-                        &self.data,
-                        &mut self.affected_data,
-                        (i.0, *sam as f32),
-                        self.selection,
-                    );
-                }
+            } else if let Some(sam) = i.1 {
+                self.parser.affect_data(
+                    &self.data,
+                    &mut self.affected_data,
+                    (i.0, *sam as f32),
+                    self.selection,
+                );
             }
         }
     }
@@ -378,12 +397,19 @@ impl WaveformPage {
         let pdd = 5;
         let selecc =
             self.selection.1.max(self.selection.0) - self.selection.0.min(self.selection.1);
-        let but_insert = button("Insert blank")
+        let slid = slider(6..=16, self.padlen, |x| MesDummies::WavePageSig {
+            wp_sig: WavePageSig::PadLen(x),
+        })
+        .width(Length::Fixed(100.));
+        let txt = "Pad";
+        let content = row![txt, slid];
+        let content: Element<MesDummies> = content.into();
+        let but_insert = button(content)
             .padding(pdd)
             .on_press(MesDummies::WavePageSig {
                 wp_sig: {
                     WavePageSig::Paste {
-                        empty: Some(if selecc == 0 { 16 } else { selecc }),
+                        empty: Some(1 << self.padlen),
                     }
                 },
             });
@@ -431,7 +457,7 @@ impl WaveformPage {
 
     pub fn play_audio(&self, edited: bool) {
         if edited {
-            self.play_audio_edited()
+            self.play_audio_selected()
         } else {
             self.play_audio_og()
         }
@@ -440,18 +466,57 @@ impl WaveformPage {
     fn play_audio_og(&self) {
         play_i16_audio(&self.data, self.sample_rate, self.channels);
     }
+    #[allow(unused)]
     fn play_audio_edited(&self) {
-        let mut data = self.data.clone();
-        for (i, s) in self
-            .affected_data
-            .iter()
-            .enumerate()
-            .map(|(i, s)| (i + self.selection.0, *s))
-        {
-            data[i] = s;
-        }
+        let data = [
+            self.data[..self.selection.0].to_vec(),
+            self.affected_data.clone(),
+            self.data[self.selection.1..].to_vec(),
+        ]
+        .concat();
+        // let mut data = self.data.clone();
+        // for (i, s) in self
+        //     .affected_data
+        //     .iter()
+        //     .enumerate()
+        //     .map(|(i, s)| (i + self.selection.0, *s))
+        // {
+        //     data[i] = s;
+        // }
 
         play_i16_audio(&data, self.sample_rate, self.channels);
+    }
+    fn play_audio_selected(&self) {
+        if self.edit_mode {
+            if self.affected_data.len() / 2 < self.sample_rate as usize {
+                let data: Vec<i16> = self
+                    .affected_data
+                    .iter()
+                    .cycle()
+                    .take(self.sample_rate as usize * 5)
+                    .cloned()
+                    .collect();
+                play_i16_audio(&data, self.sample_rate, self.channels);
+            } else {
+                play_i16_audio(&self.affected_data, self.sample_rate, self.channels);
+            }
+        } else {
+            if self.select_len() / 2 < self.sample_rate as usize {
+                let data: Vec<i16> = self.data[self.selection.0..self.selection.1]
+                    .iter()
+                    .cycle()
+                    .take(self.sample_rate as usize * 5)
+                    .cloned()
+                    .collect();
+                play_i16_audio(&data, self.sample_rate, self.channels);
+            } else {
+                play_i16_audio(
+                    &self.data[self.selection.0..self.selection.1],
+                    self.sample_rate,
+                    self.channels,
+                );
+            }
+        }
     }
 
     pub fn process_wave_drawer_sig(&mut self, signal: WaveDrawerSig) {
@@ -536,9 +601,10 @@ impl WaveformPage {
                 if let Some(n) = empty {
                     self.pad_data(n);
                 } else {
-                    self.insert_data(&buffer);
+                    self.insert_data(buffer);
                 }
             }
+            PadLen(x) => self.padlen = x,
         };
         self.request_redraw();
     }

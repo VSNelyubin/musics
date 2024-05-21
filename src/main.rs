@@ -8,7 +8,8 @@ mod audio_player;
 pub mod not_retarded_vector;
 
 use data_loader::find_file;
-use iced::widget::Row;
+use iced::{widget::Row, window::settings};
+use sonogram::{ColourGradient, ColourTheme, SpecOptionsBuilder};
 // use spectrum_page::SpectrumPage;
 use waveform_page::drawer::WaveDrawerSig;
 use waveform_page::WavePageSig;
@@ -80,17 +81,22 @@ impl Pages {
     }
 }
 
+const SPEC_LEN: usize = 1 << 11;
+
 #[derive(Default)]
 struct Adio {
     // hide_audio: bool,
-    pages: Vec<Pages>,
+    pages: Vec<WaveformPage>,
     cur_page: usize,
     buffer: Vec<i16>,
+    cached_spec: Vec<u8>,
 }
 
 #[derive(Debug, Clone)]
 pub enum MesDummies {
-    Fatten,
+    GetSpec,
+    ClearSpec,
+    NewWindow,
     OpenFile,
     WriteWav,
     PlayAudio(bool),
@@ -99,16 +105,19 @@ pub enum MesDummies {
 }
 
 impl<'a> Adio {
-    fn top_menu() -> Row<'a, MesDummies> {
+    fn top_menu(&self) -> Row<'a, MesDummies> {
         let menu: Row<'_, MesDummies> = row![
             button("Import").padding(5).on_press(MesDummies::OpenFile),
             button("Play")
                 .padding(5)
                 .on_press(MesDummies::PlayAudio(false)),
-            button("Play Edited")
+            button("Play Selected")
                 .padding(5)
                 .on_press(MesDummies::PlayAudio(true)),
-            button("Save Wav").padding(5).on_press(MesDummies::WriteWav) // button("Flip Page").padding(5).on_press(MesDummies::Fatten)
+            button("Save Wav").padding(5).on_press(MesDummies::WriteWav),
+            button("Spectrogram")
+                .padding(5)
+                .on_press(MesDummies::GetSpec),
         ]
         .spacing(5)
         .padding(5)
@@ -122,7 +131,7 @@ impl Sandbox for Adio {
 
     fn new() -> Self {
         let mut res = Adio::default();
-        res.pages.push(Pages::new_wedge(64, 32));
+        res.pages.push(WaveformPage::new_wedge(64, 32));
         // res.pages.push(Pages::new_noisy(128));
         res
     }
@@ -137,10 +146,16 @@ impl Sandbox for Adio {
 
     fn update(&mut self, message: Self::Message) {
         match message {
-            MesDummies::Fatten => {
-                // self.hide_audio = !self.hide_audio;
-                self.cur_page = 1 - self.cur_page;
-                // self.pages[self.cur_page].append_noise(16);
+            MesDummies::GetSpec => {
+                self.cached_spec = get_spec(
+                    self.pages[self.cur_page].focus_data(),
+                    self.pages[self.cur_page].sample_rate(),
+                )
+            }
+            MesDummies::ClearSpec => self.cached_spec.clear(),
+            MesDummies::NewWindow => {
+                let _x: (iced::window::Id, iced::Command<MesDummies>) =
+                    iced::window::spawn(settings::Settings::default());
             }
             MesDummies::WavePageSig { wp_sig } => {
                 self.pages[self.cur_page].process_page_signal(wp_sig, &mut self.buffer)
@@ -153,7 +168,8 @@ impl Sandbox for Adio {
                 if data.is_empty() {
                     return;
                 }
-                self.pages[self.cur_page] = Pages::new_widh_data(data, sample_rate, channels);
+                self.pages[self.cur_page] =
+                    WaveformPage::new_widh_data(data, sample_rate, channels);
             }
             MesDummies::PlayAudio(edited) => {
                 self.pages[self.cur_page].play_audio(edited);
@@ -167,12 +183,16 @@ impl Sandbox for Adio {
     fn view(&self) -> Element<Self::Message> {
         // let menu: iced::widget::Row<'_, MesDummies> = row![button("Import").padding(5),button("Die").padding(5)].spacing(5).height(30);
         let content = column![
-            Adio::top_menu(),
+            self.top_menu(),
             horizontal_rule(5),
             // button("Yay")
             // .padding(40)
             // .width(Length::Fill)
             // .height(Length::Fill),
+            iced::widget::image::Image::new(iced::widget::image::Handle::from_memory(
+                self.cached_spec.clone()
+            ))
+            .width(Length::Fill),
             self.pages[self.cur_page].view()
         ]
         .align_items(Alignment::Start);
@@ -184,4 +204,32 @@ impl Sandbox for Adio {
             .center_y()
             .into()
     }
+}
+
+fn get_spec(waveform: Vec<i16>, sr: u32) -> Vec<u8> {
+    // Build the model
+    let waveform = if waveform.len() <= SPEC_LEN {
+        waveform
+            .iter()
+            .cycle()
+            .take(SPEC_LEN * 16)
+            .cloned()
+            .collect()
+    } else {
+        waveform
+    };
+    let mut spectrograph = SpecOptionsBuilder::new(SPEC_LEN) //.min(waveform.len().next_power_of_two() >> 1))
+        .load_data_from_memory(waveform, sr)
+        .build()
+        .unwrap();
+
+    // Compute the spectrogram giving the number of bins and the window overlap.
+    let mut spectrogram = spectrograph.compute();
+
+    // Specify a colour gradient to use (note you can create custom ones)
+    let mut gradient = ColourGradient::create(ColourTheme::Default);
+
+    spectrogram
+        .to_png_in_memory(sonogram::FrequencyScale::Log, &mut gradient, 1000, 150)
+        .unwrap()
 }
