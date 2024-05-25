@@ -9,13 +9,14 @@ pub fn save_wav(data: &[i16], sample_rate: u32, channels: u16) {
         .unwrap_or("./".to_string());
 
     let files = FileDialog::new().set_directory(dir).save_file();
-    let file = match files {
+    let mut file = match files {
         Some(s) => s,
         None => {
             println!("no file selected");
             return;
         }
     };
+    file.set_extension("wav");
 
     let header = Header::new(WAV_FORMAT_PCM, channels, sample_rate, 16);
     let mut out_file = File::create(file).unwrap();
