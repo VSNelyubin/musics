@@ -27,8 +27,10 @@ Targ: Targets ={
 };
 
 Opr: Opr ={
+    #[precedence(level="1")]
     "*" => Opr::Mul,
     "/" => Opr::Div,
+    #[precedence(level="0")]
     "+" => Opr::Add,
     "-" => Opr::Sub,
 };
@@ -78,23 +80,24 @@ Spec:Spec ={
     r"&[fF](ac)?"=>Spec::Fac,
 }
 
-Bin: Expr={
-    #[precedence(level="1")]
-    "(" <l:Expr> <o:Opr> <r:Expr>")" => Expr::Binary{l:Box::new(l),o,r:Box::new(r)},
-    #[precedence(level="0")]
-    "-"<r:Expr> => Expr::Binary{l:Box::new(Expr::Float(-1.)),o:Opr::Mul,r:Box::new(r)},
-}
-
 Expr: Expr ={
+    #[precedence(level="0")]
     "["<aa:Expr>"]" => Expr::ArrAcc(Box::new(aa)),
     <v:Var> => Expr::Var(v),
-    <b:Bin> => b,
     <f:SaFunc>"("<x:Expr>")" => Expr::SaFunc{f,x:Box::new(x)},
     <f:MaFunc>"("<xs:Comma<Expr>>")"=>Expr::MaFunc{f,xs:Box::new(xs)},
     <f:MaFunc>"("<xs:Range>")"=>Expr::MaFunc{f,xs:Box::new(xs)},
     <f:Float>=>Expr::Float(f),
     <i:Num>=>Expr::Float(i as f32),
     <s:Spec>=>Expr::Spec(s),
+    "-"<r:Expr> => Expr::Binary{l:Box::new(Expr::Float(-1.)),o:Opr::Mul,r:Box::new(r)},
+    "("<r:Expr>")" => r,
+    #[precedence(level="1")]#[assoc(side="left")]
+    <l:Expr> "*" <r:Expr> => Expr::Binary{l:Box::new(l),o:Opr::Mul,r:Box::new(r)},
+    <l:Expr> "/" <r:Expr> => Expr::Binary{l:Box::new(l),o:Opr::Div,r:Box::new(r)},
+    #[precedence(level="2")]#[assoc(side="left")]
+    <l:Expr> "+" <r:Expr> => Expr::Binary{l:Box::new(l),o:Opr::Add,r:Box::new(r)},
+    <l:Expr> "-" <r:Expr> => Expr::Binary{l:Box::new(l),o:Opr::Sub,r:Box::new(r)},
 };
 
 Stat: Statement = <i:Targ> "=" <e:Expr> => Statement{target:i,expr:e};

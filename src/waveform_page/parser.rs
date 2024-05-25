@@ -271,7 +271,10 @@ impl FormChild {
         let (pos, msg) = match e {
             InvalidToken { location } => (location, "bad token"),
             ParseError::UnrecognizedEof { location, .. } => (location, "early EOF"),
-            UnrecognizedToken { token, .. } => (token.0, "bad syntax"),
+            UnrecognizedToken { token, expected } => {
+                println!("{:?}", expected);
+                (token.0, "bad syntax")
+            }
             ParseError::ExtraToken { token } => (token.0, "bad token"),
             ParseError::User { .. } => unimplemented!(),
         };
