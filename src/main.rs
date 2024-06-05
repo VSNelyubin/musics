@@ -115,9 +115,9 @@ impl<'a> Adio {
                 .padding(5)
                 .on_press(MesDummies::PlayAudio(true)),
             button("Save Wav").padding(5).on_press(MesDummies::WriteWav),
-            button("Spectrogram")
-                .padding(5)
-                .on_press(MesDummies::GetSpec),
+            button("Spectrogram").padding(5).on_press_maybe(
+                (self.pages[self.cur_page].select_len() > 1).then_some(MesDummies::GetSpec)
+            ),
         ]
         .spacing(5)
         .padding(5)
