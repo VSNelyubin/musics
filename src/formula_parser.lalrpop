@@ -97,4 +97,29 @@ Expr: Expr ={
     <s:Spec>=>Expr::Spec(s),
 };
 
-Stat: Statement = <i:Targ> "=" <e:Expr> => Statement{target:i,expr:e};
+Stat: Statement ={
+     <i:Targ> "=" <e:Expr> => Statement{target:i,expr:e},
+};
+
+LogOpr: LogOpr ={
+    "&&" => LogOpr::And,
+    "||" => LogOpr::Or,
+    "^" => LogOpr::Xor,
+};
+
+CmpOpr: CmpOpr ={
+    "==" => CmpOpr::Eq,
+    ">=" => CmpOpr::Greq,
+    ">" => CmpOpr::Grt,
+    "<=" => CmpOpr::Leq,
+    "<" => CmpOpr::Lss,
+};
+
+BinExpr: BinExpr ={
+    #[precedence(level="0")]
+    "!" <l:BinExpr> => BinExpr::Bin{l:Box::new(l),o:LogOpr::Xor,r:Box::new(BinExpr::Lit(true))},
+    #[precedence(level="1")]
+    "(" <l:Expr> <o:CmpOpr> <r:Expr>")" => BinExpr::Cmp{l:Box::new(l),o,r:Box::new(r)},
+    "(" <l:BinExpr> <o:LogOpr> <r:BinExpr>")" => BinExpr::Bin{l:Box::new(l),o,r:Box::new(r)},
+
+};

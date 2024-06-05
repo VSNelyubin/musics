@@ -197,6 +197,21 @@ impl Expr {
     }
 }
 
+impl Statement{
+    fn execute(
+        &self,
+        source: &[i16],
+        target: &mut [i16],
+        mouse: (usize, f32),
+        selection: (usize, usize),
+        var_num:usize,
+    ) {
+        let (pos, mouse_val) = mouse;
+        let mut variables = vec![0.; var_num];
+        match self
+    }
+}
+
 #[derive(Debug)]
 pub struct FormChild {
     content: Content,

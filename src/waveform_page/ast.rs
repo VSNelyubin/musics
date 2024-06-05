@@ -1,7 +1,14 @@
 #[derive(Debug, Clone)]
-pub struct Statement {
-    pub target: Targets,
-    pub expr: Expr,
+pub enum Statement {
+    Assign {
+        target: Targets,
+        expr: Expr,
+    },
+    Block(Box<Vec<Statement>>),
+    Cond {
+        ifs: Box<BinExpr>,
+        thens: Box<Statement>,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -59,4 +66,35 @@ pub enum Expr {
     Binary { l: Box<Expr>, o: Opr, r: Box<Expr> },
     SaFunc { f: SaFunc, x: Box<Expr> },
     MaFunc { f: MaFunc, xs: Box<Vec<Expr>> },
+}
+
+#[derive(Debug, Clone)]
+pub enum BinExpr {
+    Lit(bool),
+    Cmp {
+        l: Box<Expr>,
+        o: CmpOpr,
+        r: Box<Expr>,
+    },
+    Bin {
+        l: Box<BinExpr>,
+        o: LogOpr,
+        r: Box<BinExpr>,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub enum CmpOpr {
+    Eq,
+    Greq,
+    Grt,
+    Leq,
+    Lss,
+}
+
+#[derive(Debug, Clone)]
+pub enum LogOpr {
+    And,
+    Or,
+    Xor,
 }
