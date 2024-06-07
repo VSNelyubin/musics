@@ -264,6 +264,7 @@ impl WaveformPage {
                     &mut self.affected_data,
                     (i.0, *sam as f32),
                     self.selection,
+                    self.channels.into(),
                 );
             }
         }
@@ -487,6 +488,7 @@ impl WaveformPage {
         play_i16_audio(&data, self.sample_rate, self.channels);
     }
     fn play_audio_selected(&self) {
+        #[allow(clippy::collapsible_else_if)]
         if self.edit_mode {
             if self.affected_data.len() / (self.channels as usize) < self.sample_rate as usize {
                 let data: Vec<i16> = self

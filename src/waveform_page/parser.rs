@@ -93,10 +93,11 @@ impl Expr {
         vars: &[f32],
         mouse: (usize, f32),
         selection: (usize, usize),
+        chnum: usize,
     ) -> Result<f32, EvalErr> {
         let rez = match self {
             Expr::ArrAcc(off) => {
-                let offset = off.eval(data, vars, mouse, selection)?;
+                let offset = off.eval(data, vars, mouse, selection, chnum)?;
                 let off_i64 = offset.floor();
                 let fac = offset - off_i64;
                 let off_i64 = off_i64 as i64;
@@ -118,13 +119,13 @@ impl Expr {
                 Spec::E => E,
                 Spec::Rnd => 0f32,
                 Spec::Mouse => mouse.1,
-                Spec::Time => (mouse.0 + selection.0) as f32,
+                Spec::Time => ((mouse.0 + selection.0) / chnum) as f32,
                 Spec::Fac => (mouse.0 as f64 / (selection.1 - selection.0) as f64) as f32,
             },
             Expr::Float(f) => *f,
             Expr::Binary { l, o, r } => {
-                let l = l.eval(data, vars, mouse, selection)?;
-                let r = r.eval(data, vars, mouse, selection)?;
+                let l = l.eval(data, vars, mouse, selection, chnum)?;
+                let r = r.eval(data, vars, mouse, selection, chnum)?;
                 match o {
                     Opr::Add => l + r,
                     Opr::Sub => l - r,
@@ -139,7 +140,7 @@ impl Expr {
                 }
             }
             Expr::SaFunc { f, x } => {
-                let v = x.eval(data, vars, mouse, selection)?;
+                let v = x.eval(data, vars, mouse, selection, chnum)?;
                 match f {
                     SaFunc::Sin => v.sin(),
                     SaFunc::Cos => v.cos(),
@@ -155,7 +156,9 @@ impl Expr {
                 }
             }
             Expr::MaFunc { f, xs } => {
-                let vs = xs.iter().map(|x| x.eval(data, vars, mouse, selection));
+                let vs = xs
+                    .iter()
+                    .map(|x| x.eval(data, vars, mouse, selection, chnum));
                 if let Some(x) = vs.clone().find(|x| x.is_err()) {
                     x?;
                 }
@@ -308,6 +311,7 @@ impl FormChild {
         target: &mut [i16],
         mouse: (usize, f32),
         selection: (usize, usize),
+        chnum: usize,
     ) {
         let (pos, mouse_val) = mouse;
         let mut variables = vec![0.; self.variables];
@@ -315,7 +319,7 @@ impl FormChild {
         for stat in &self.formula {
             let val = stat
                 .expr
-                .eval(source, &variables, (pos, mouse_val), selection);
+                .eval(source, &variables, (pos, mouse_val), selection, chnum);
             let val = match val {
                 Ok(val) => val,
                 Err(e) => {

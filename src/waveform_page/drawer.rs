@@ -225,8 +225,29 @@ impl<'w> WaveformDrawer<'w> {
             .map_while(|x| x.map(|y| x2p(y, 50.)))
             .collect();
         // println!("{}",rez.len());
-        assert!(rez.len() as isize / 2 >= 0);
-        rez
+        // assert!(rez.len() as isize / 2 >= 0);
+        // println!("{}", self.parent.transform.scale.x);
+        if self.parent.transform.scale.x > 0.0003 {
+            let rez2: Vec<_> = (0..self.parent.data.len())
+                .step_by(self.parent.sample_rate as usize * self.parent.channels as usize / 10)
+                .map(|x| self.get_point_x(x, bounds))
+                .skip_while(|x| x.is_none())
+                .map_while(|x| x.map(|y| x2p(y, 50. / 3.)))
+                .collect();
+            if self.parent.transform.scale.x > 0.003 {
+                let rez3: Vec<_> = (0..self.parent.data.len())
+                    .step_by(self.parent.sample_rate as usize * self.parent.channels as usize / 100)
+                    .map(|x| self.get_point_x(x, bounds))
+                    .skip_while(|x| x.is_none())
+                    .map_while(|x| x.map(|y| x2p(y, 50. / 9.)))
+                    .collect();
+                [rez, rez2, rez3].concat()
+            } else {
+                [rez, rez2].concat()
+            }
+        } else {
+            rez
+        }
     }
 
     fn iter_step(&self) -> usize {
